@@ -5,7 +5,7 @@ be using Go to write it, because I like Go.
 
 (I intend to formalize the literate programming syntax I'm using with
 markdown later, but it should be fairly straight forward. A header immediately
-below a code block in quotation marks is a name for that code block. It can be
+before a code block in quotation marks is a name for that code block. It can be
 referenced in other code blocks as `<<<<name>>>>`. A `+=` at the end of the
 header means append to the code block, don't replace it. A header without
 quotation marks means the code block should be the contents of that filename.)
@@ -76,12 +76,12 @@ for {
 ```
 
 The problem with this, is that `os.Stdin` sends things to the underlying `io.Reader`
-one line at a time, and doesn't provide a way to change this, so it turns out
+one line at a time, and doesn't provide a way to change this. It turns out
 that there's no way in the standard library to force it to send one character
 at a time. Luckily for us, the third party package `github.com/pkg/term` *does*
 provide a way to manipulate the settings of POSIX ttys, which is all we need
-to support. So instead, let's import that. (We'll still use bufio for the
-simplicity of ReadRune.)
+to support. So instead, let's import that so that we can convert the terminal
+to raw mode. (We'll still use bufio for the simplicity of ReadRune.)
 
 ### "main.go imports"
 ```go
@@ -218,7 +218,7 @@ if cmd == "exit" {
 
 There's still no error (unless we just hit enter without entering anything,
 in which case it complains about not being able to execute "". (We should
-probably handle that as a special case, too.) 
+probably handle that as a special case, too.)) 
 
 So what's going on with the lack of any output or error? It turns out if we look at the `os/exec.Command`
 documentation we'll see:
@@ -238,8 +238,7 @@ Stderr io.Writer
 `Stdin` makes a similar claim. So let's hook those up to os.Stdin, os.Stdout
 and os.Stderr.
 
-While we're at it, let's print
-a simple prompt.
+While we're at it, let's print a simple prompt.
 
 So our new command handling code is:
 
