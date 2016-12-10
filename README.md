@@ -347,7 +347,54 @@ func (c Command) HandleCmd() error {
 "strings"
 ```
 
-There's one minor noticable bug. If we hit `^D` on an empty line, the shell
+There's one other command that needs to be implemented internally: `cd`. Each
+program in unix contains it's own working directory. When it's spawned, it
+inherits its parent's working directory. If `cd` were implemented as an
+external program, the new directory would never make it back to the
+parent (our shell.) It's fairly easy to change the working directory,
+we just add a check after we've parsed the args if the command is "cd", and
+call `os.Chdir` instead of `exec.Command` as appropriate.
+
+### "HandleCmd Implementation"
+```go
+func (c Command) HandleCmd() error {
+	parsed := strings.Fields(string(c))
+	if len(parsed) == 0 {
+		// There was no command, it's not an error, the user just hit
+		// enter.
+		PrintPrompt()
+		return nil
+	}
+
+	var args []string
+	for _, val := range parsed[1:] {
+		if val[0] == '$' {
+			args = append(args, os.Getenv(val[1:]))
+		} else {
+			args = append(args, val)
+		}
+	}
+
+	if parsed[0] == "cd" {
+		if len(args) == 0 {
+			return fmt.Errorf("Must provide an argument to cd")
+		}
+		return os.Chdir(args[0])
+
+	}
+
+	cmd := exec.Command(parsed[0], args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+```
+
+### Handling EOFs
+
+There's still one minor noticable bug. If we hit `^D` on an empty line, the shell
 panics with an error of "EOF". ReadRune is returning an EOF, which we should
 handle gracefully, because it's not really an error condition.
 
