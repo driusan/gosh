@@ -3,12 +3,12 @@
 This is an attempt to write a simple UNIX shell using literate programming. We'll
 be using Go to write it, because I like Go.
 
-(I intend to formalize the literate programming syntax I'm using later, but it
-should be fairly straight forward. A header immediately below a code block in
-quotation marks is a name for that code block. It can be referenced in other
-code blocks as `<<<<name>>>>`. A `+=` at the end of the header means append to the
-code block, don't replace it. A header without quotation marks means the code
-block should be the contents of that filename.)
+(I intend to formalize the literate programming syntax I'm using with
+markdown later, but it should be fairly straight forward. A header immediately
+below a code block in quotation marks is a name for that code block. It can be
+referenced in other code blocks as `<<<<name>>>>`. A `+=` at the end of the
+header means append to the code block, don't replace it. A header without
+quotation marks means the code block should be the contents of that filename.)
 
 ## What does a simple shell do?
 
@@ -108,6 +108,8 @@ for {
 	println(c)
 }
 ```
+
+## The Command Loop
 
 That's a good start, but we probably want to handle the rune that's read in a
 way other than just printing it. Let's keep track of what the current command
@@ -216,9 +218,10 @@ if cmd == "exit" {
 
 There's still no error (unless we just hit enter without entering anything,
 in which case it complains about not being able to execute "". (We should
-probably handle that as a special case, too.) But what's going on with the
-lack of any output or error? It turns out if we look at the `os/exec.Command`
-documentation we'll see 
+probably handle that as a special case, too.) 
+
+So what's going on with the lack of any output or error? It turns out if we look at the `os/exec.Command`
+documentation we'll see:
 
 ```go
 // Stdout and Stderr specify the process's standard output and error.
@@ -339,7 +342,7 @@ func (c Command) HandleCmd() error {
 }
 ```
 
-### "main.go imports"
+### "main.go imports" +=
 ```go
 "strings"
 ```
