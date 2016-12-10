@@ -83,6 +83,10 @@ provide a way to manipulate the settings of POSIX ttys, which is all we need
 to support. So instead, let's import that so that we can convert the terminal
 to raw mode. (We'll still use bufio for the simplicity of ReadRune.)
 
+(We'll actually use CbreakMode(), which is like raw mode in that it'll send
+us 1 key at a time, but unlike raw mode in that special command sequences
+will still be interpreted.)
+
 ### "main.go imports"
 ```go
 "github.com/pkg/term"
@@ -98,7 +102,7 @@ if err != nil {
 }
 // Restore the previous terminal settings at the end of the program
 defer t.Restore()
-
+t.SetCbreak()
 r := bufio.NewReader(t)
 for {
 	c, _, err := r.ReadRune()
@@ -137,6 +141,7 @@ if err != nil {
 }
 // Restore the previous terminal settings at the end of the program
 defer t.Restore()
+t.SetCbreak()
 ```
 
 ### "Command Loop"
@@ -150,14 +155,76 @@ for {
 	}
 	switch c {
 		case '\n':
+			// The terminal doesn't echo in raw mode,
+			// so print the newline itself to the terminal.
+			fmt.Printf("\n")
 			<<<Handle Command>>>
 			cmd = ""
 		default:
+			fmt.Printf("%c", c)
 			cmd += Command(c)
 	}
 }
 ```
 
+Okay, but there's a problem. Since we're getting sent one character
+at a time, when we get the error `exec: "ls\u007f": executable file not found in $PATH`
+
+(0x7F is the ASCII code for "DEL". 0x08 is the code for "Backspace".)
+
+Let's make both of those work as backspace.
+
+### "Command Loop"
+```go
+r := bufio.NewReader(t)
+var cmd Command
+for {
+	c, _, err := r.ReadRune()
+	if err != nil {
+		panic(err)
+	}
+	switch c {
+		case '\n':
+			// The terminal doesn't echo in raw mode,
+			// so print the newline itself to the terminal.
+			fmt.Printf("\n")
+			<<<Handle Command>>>
+			cmd = ""
+		case '\u007f', '\u0008':
+			<<<Handle Backspace>>>
+		default:
+			fmt.Printf("%c", c)
+			cmd += Command(c)
+	}
+}
+```
+
+How do we handle the backspace key? We want to cut the last
+character off cmd, and erase it from the screen. Let's try 
+printing '\u0008' and see if that erases the last character
+in Cbreak mode:
+
+### "Handle Backspace"
+```go
+if len(cmd) > 0 {
+	cmd = cmd[:len(cmd)-1]
+}
+fmt.Printf("\u0008")
+```
+
+It moves the cursor, but doesn't actually delete the character. There might be
+a more appropriate character to print, but for now we'll just print backspace,
+space to overwrite the character, and then backspace again.
+
+### "Handle Backspace"
+```go
+if len(cmd) > 0 {
+	cmd = cmd[:len(cmd)-1]
+}
+fmt.Printf("\u0008 \u0008")
+```
+
+## Handling the Command
 Okay, so how do we handle the command? If it's the string "exit"
 we probably should exit. Otherwise, we'll want to execute it using
 the [`os.exec`](https://golang.org/pkg/os/exec/) package. We were
@@ -393,9 +460,10 @@ func (c Command) HandleCmd() error {
 
 ### Handling EOFs
 
-There's still one minor noticable bug. If we hit `^D` on an empty line, the shell
-panics with an error of "EOF". ReadRune is returning an EOF, which we should
-handle gracefully, because it's not really an error condition.
+There's still one minor noticable bug. If we hit `^D` on an empty line, it should
+be treated as an EOF instead of adding the character `0x04`. (And
+if it's not an empty line, we probably still shouldn't add it to
+the command)
 
 ### "Command Loop"
 ```go
@@ -403,27 +471,27 @@ r := bufio.NewReader(t)
 var cmd Command
 for {
 	c, _, err := r.ReadRune()
-	switch err {
-		case nil: // do nothing
-		case io.EOF:
-			os.Exit(0)
-		default:
-			panic(err)
+	if err != nil {
+		panic(err)
 	}
-
 	switch c {
 		case '\n':
+			// The terminal doesn't echo in raw mode,
+			// so print the newline itself to the terminal.
+			fmt.Printf("\n")
 			<<<Handle Command>>>
 			cmd = ""
+		case '\u0004':
+			if len(cmd) == 0 {
+				os.Exit(0)
+			}
+		case '\u007f', '\u0008':
+			<<<Handle Backspace>>>
 		default:
+			fmt.Printf("%c", c)
 			cmd += Command(c)
 	}
 }
-```
-
-### "main.go imports" +=
-```go
-"io"
 ```
 
 And now.. hooray! We have a simple shell that works! We should add tab completion,

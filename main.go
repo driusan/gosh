@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/pkg/term"
-	"io"
 	"os"
 	"os/exec"
 )
@@ -56,22 +55,20 @@ func main() {
 	}
 	// Restore the previous terminal settings at the end of the program
 	defer t.Restore()
+	t.SetCbreak()
 	PrintPrompt()
 
 	r := bufio.NewReader(t)
 	var cmd Command
 	for {
 		c, _, err := r.ReadRune()
-		switch err {
-		case nil:
-			break
-		case io.EOF:
-			os.Exit(0)
-		default:
+		if err != nil {
 			panic(err)
 		}
 		switch c {
 		case '\n':
+			fmt.Printf("\n")
+
 			if cmd == "exit" {
 				os.Exit(0)
 			} else if cmd == "" {
@@ -85,7 +82,18 @@ func main() {
 			}
 
 			cmd = ""
+		case '\u0004':
+			if len(cmd) == 0 {
+				os.Exit(0)
+			}
+		case '\u007f', '\u0008':
+			if len(cmd) > 0 {
+				cmd = cmd[:len(cmd)-1]
+			}
+			fmt.Printf("\u0008 \u0008")
+
 		default:
+			fmt.Printf("%c", c)
 			cmd += Command(c)
 		}
 	}
