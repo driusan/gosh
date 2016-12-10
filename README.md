@@ -437,5 +437,8 @@ create a pull request telling the story of how to you'd do it, or just create
 an issue on GitHub and see if someone else does. Feel free to also file bug
 reports in either the code or prose.
 
+The Tokenization.md file builds on this and improves on the tokenization by
+adding support for string literals (with spaces) in arguments.
+
 The final result of putting this all together after running `go fmt` is in the
-accompanying `main.go` file.
+accompanying `*.go` files in this repo.

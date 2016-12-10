@@ -7,13 +7,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 )
 
 type Command string
 
 func (c Command) HandleCmd() error {
-	parsed := strings.Fields(string(c))
+	parsed := c.Tokenize()
 	if len(parsed) == 0 {
 		// There was no command, it's not an error, the user just hit
 		// enter.
