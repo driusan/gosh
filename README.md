@@ -5,7 +5,7 @@ be using Go to write it, because I like Go.
 
 (I intend to formalize the literate programming syntax I'm using with
 markdown later, but it should be fairly straight forward. A header immediately
-below a code block in quotation marks is a name for that code block. It can be
+before a code block in quotation marks is a name for that code block. It can be
 referenced in other code blocks as `<<<<name>>>>`. A `+=` at the end of the
 header means append to the code block, don't replace it. A header without
 quotation marks means the code block should be the contents of that filename.)
