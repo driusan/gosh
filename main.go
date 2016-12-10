@@ -89,9 +89,8 @@ func main() {
 		case '\u007f', '\u0008':
 			if len(cmd) > 0 {
 				cmd = cmd[:len(cmd)-1]
+				fmt.Printf("\u0008 \u0008")
 			}
-			fmt.Printf("\u0008 \u0008")
-
 		default:
 			fmt.Printf("%c", c)
 			cmd += Command(c)

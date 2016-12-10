@@ -208,8 +208,8 @@ in Cbreak mode:
 ```go
 if len(cmd) > 0 {
 	cmd = cmd[:len(cmd)-1]
+	fmt.Printf("\u0008")
 }
-fmt.Printf("\u0008")
 ```
 
 It moves the cursor, but doesn't actually delete the character. There might be
@@ -220,8 +220,8 @@ space to overwrite the character, and then backspace again.
 ```go
 if len(cmd) > 0 {
 	cmd = cmd[:len(cmd)-1]
+	fmt.Printf("\u0008 \u0008")
 }
-fmt.Printf("\u0008 \u0008")
 ```
 
 ## Handling the Command
