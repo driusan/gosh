@@ -4,13 +4,11 @@ This is an attempt to write a simple UNIX shell using literate programming. We'l
 be using Go to write it, because I like Go.
 
 (I intend to formalize the literate programming syntax I'm using later, but it
-should be fairly straight forward if you read the markdown directly. After the
-triple backticks and language declaration of a codeblock, if there's a string
-surrounded by quotes, it's the name of the codeblock. It can be referenced in
-other code blocks as <<<name>>>. If the declaration ends in +=, it means append
-to a previous declaration. If there's a string without quotes after the language,
-it's a filename to save the codeblock into. I have no idea how GitHub will
-render this, but it works for writing it.)
+should be fairly straight forward. A header immediately below a code block in
+quotation marks is a name for that code block. It can be referenced in other
+code blocks as `<<<<name>>>>`. A `+=` at the end of the header means append to the
+code block, don't replace it. A header without quotation marks means the code
+block should be the contents of that filename.)
 
 ## What does a simple shell do?
 
@@ -29,7 +27,8 @@ we'll stick to the absolute basics.
 We'll start with the main loop. Most Go programs have a file that looks
 something like this:
 
-```go main.go
+### main.go
+```go
 package main
 
 import (
@@ -46,7 +45,8 @@ func main() {
 Our main body is going to be a loop that repeatedly reads from `os.Stdin`.
 This means that we should probably start by adding `os` to the import list.
 
-```go "main.go imports"
+### "main.go imports"
+```go
 "os"
 ```
 
@@ -55,14 +55,16 @@ And we'll start with a loop that just repeatedly reads a rune from the user.
 fortunately the `bufio` package provides a wrapper which allows us to convert
 any `io.Reader` into a RuneReader, so let's import that too.
 
-```go "main.go imports" +=
+### "main.go imports" +=
+```go
 "bufio"
 ```
 
 Then the basis of our main body becomes a loop that initializes and repeatedly
 reads a rune from `os.Stdio`. For now, we'll just print it and see how it goes:
 
-```go "mainbody"
+### "mainbody"
+```go
 r := bufio.NewReader(os.Stdin)
 for {
 	c, _, err := r.ReadRune()
@@ -81,12 +83,14 @@ provide a way to manipulate the settings of POSIX ttys, which is all we need
 to support. So instead, let's import that. (We'll still use bufio for the
 simplicity of ReadRune.)
 
-```go "main.go imports"
+### "main.go imports"
+```go
 "github.com/pkg/term"
 "bufio"
 ```
 
-```go "mainbody"
+### "mainbody"
+```go
 // Initialize the terminal
 t, err := term.Open("/dev/tty")
 if err != nil {
@@ -111,16 +115,19 @@ read is in a string, and when a newline is pressed, call a function to handle
 the current command and reset the string. We'll declare a type for commands,
 and do a little refactoring, just to be proactive.
 
-```go "mainbody"
+### "mainbody"
+```go
 <<<Initialize Terminal>>>
 <<<Command Loop>
 ```
 
-```go "main.go globals"
+### "main.go globals"
+```go
 type Command string
 ```
 
-```go "Initialize Terminal"
+### "Initialize Terminal"
+```go
 // Initialize the terminal
 t, err := term.Open("/dev/tty")
 if err != nil {
@@ -130,7 +137,8 @@ if err != nil {
 defer t.Restore()
 ```
 
-```go "Command Loop"
+### "Command Loop"
+```go
 r := bufio.NewReader(t)
 var cmd Command
 for {
@@ -155,7 +163,8 @@ proactive about declaring cmd as a type instead of a string, so
 we can just define some kind of HandleCmd() method on the type and
 call that.
 
-```go "Handle Command"
+### "Handle Command"
+```go
 if cmd == "exit" {
 	os.Exit(0)
 } else {
@@ -163,11 +172,13 @@ if cmd == "exit" {
 }
 ```
 
-```go "main.go globals" +=
+### "main.go globals" +=
+```go
 <<<HandleCmd Implementation>>>
 ```
 
-```go "HandleCmd Implementation"
+### "HandleCmd Implementation"
+```go
 func (c Command) HandleCmd() error {
 	cmd := exec.Command(string(c))
 	return cmd.Run()
@@ -177,7 +188,8 @@ func (c Command) HandleCmd() error {
 We'll need to add `os` and `os/exec` to our imports, while we're
 at it.
 
-```go "main.go imports" +=
+### "main.go imports" +=
+```go
 "os"
 "os/exec"
 ```
@@ -185,7 +197,8 @@ at it.
 If we run it and try executing something, it doesn't seem to be working.
 What's going on? Let's print the error if it happens to find out.
 
-```go "Handle Command"
+### "Handle Command"
+```go
 if cmd == "exit" {
 	os.Exit(0)
 } else {
@@ -196,7 +209,8 @@ if cmd == "exit" {
 }
 ```
 
-```go "main.go imports" +=
+### "main.go imports" +=
+```go
 "fmt"
 ```
 
@@ -225,7 +239,9 @@ While we're at it, let's print
 a simple prompt.
 
 So our new command handling code is:
-```go "Handle Command"
+
+### "Handle Command"
+```go
 if cmd == "exit" {
 	os.Exit(0)
 } else if cmd == "" {
@@ -240,7 +256,9 @@ if cmd == "exit" {
 ```
 
 We need to define PrintPrompt() that we just used.
-```go "main.go globals" +=
+
+### "main.go globals" +=
+```go
 func PrintPrompt() {
 	fmt.Printf("\n> ")
 }
@@ -248,13 +266,15 @@ func PrintPrompt() {
 
 And we'll want to print it on startup too:
 
-```go "Initialize Terminal" +=
+### "Initialize Terminal" +=
+```go
 PrintPrompt()
 ```
 
 And our new HandleCmd() implementation.
 
-```go "HandleCmd Implementation"
+### "HandleCmd Implementation"
+```go
 func (c Command) HandleCmd() error {
 	cmd := exec.Command(string(c))
 	cmd.Stdin = os.Stdin
@@ -291,7 +311,8 @@ While we're at it, the "$PATH" in the error message reminds me. If there *are*
 any arguments that start with a "$", we should probably expand that to the OS
 environment variable.
 
-```go "HandleCmd Implementation"
+### "HandleCmd Implementation"
+```go
 func (c Command) HandleCmd() error {
 	parsed := strings.Fields(string(c))
 	if len(parsed) == 0 {
@@ -318,7 +339,8 @@ func (c Command) HandleCmd() error {
 }
 ```
 
-```go "main.go imports"
+### "main.go imports"
+```go
 "strings"
 ```
 
@@ -326,8 +348,8 @@ There's one minor noticable bug. If we hit `^D` on an empty line, the shell
 panics with an error of "EOF". ReadRune is returning an EOF, which we should
 handle gracefully, because it's not really an error condition.
 
-
-```go "Command Loop"
+### "Command Loop"
+```go
 r := bufio.NewReader(t)
 var cmd Command
 for {
@@ -350,7 +372,8 @@ for {
 }
 ```
 
-```go "main.go imports" +=
+### "main.go imports" +=
+```go
 "io"
 ```
 
