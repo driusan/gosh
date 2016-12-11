@@ -29,7 +29,7 @@ I hate parsing, and I'm never confident I'm doing it properly (I'm usually not),
 so we'll start with some table driven tests of the basic use cases.
 
 ### tokenize_test.go
-```
+```go
 package main
 
 import (
