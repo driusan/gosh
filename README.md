@@ -507,5 +507,8 @@ reports in either the code or prose.
 The Tokenization.md file builds on this and improves on the tokenization by
 adding support for string literals (with spaces) in arguments.
 
+TabCompletion.md builds on Tokenization.md to add rudimentary command and file
+tab completion to the shell.
+
 The final result of putting this all together after running `go fmt` is in the
-accompanying `*.go` files in this repo.
+accompanying `*.go` files in this repo, so it should be go gettable.

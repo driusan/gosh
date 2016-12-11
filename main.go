@@ -86,6 +86,16 @@ func main() {
 			if len(cmd) == 0 {
 				os.Exit(0)
 			}
+			err := cmd.Complete()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+			}
+		case '\t':
+			err := cmd.Complete()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+			}
+
 		case '\u007f', '\u0008':
 			if len(cmd) > 0 {
 				cmd = cmd[:len(cmd)-1]
