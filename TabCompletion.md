@@ -265,6 +265,7 @@ ReadDir() method we used above to try and find any files that match
 filepath.Base()
 
 ### "File Suggestions Implementation"
+```go
 filedir := filepath.Dir(base)
 fileprefix := filepath.Base(base)
 files, err := ioutil.ReadDir(filedir)
@@ -278,5 +279,65 @@ for _, file := range files {
 	}
 }
 return matches
+```
+
+There's two problems with this implementation: if filedir is `/`, the
+slash gets doubled up when completed, and if base itself is a directory, it
+doesn't look into it. We'll want to share the files ranging logic when checking
+the base directory, so let's break that out into a new section.
+
+### "Check files for matches and return"
+```go
+var matches []string
+for _, file := range files {
+	if name := file.Name(); strings.HasPrefix(name, fileprefix) {
+		<<<Append file match>>>
+	}
+}
+return matches
+```
+
+The fix for `<<<Append file match>>>` is fairly straightforward.
+
+### "Append file match"
+```go
+if filedir != "/" {
+	matches = append(matches, filedir + "/" + name)
+} else {
+	matches = append(matches, filedir + name)
+}
+```
+
+Then the suggestions implementation becomes:
+
+### "File Suggestions Implementation"
+```go
+<<<Check base dir>>>
+
+filedir := filepath.Dir(base)
+fileprefix := filepath.Base(base)
+files, err := ioutil.ReadDir(filedir)
+if err != nil {
+	return nil
+}
+
+<<<Check files for matches and return>>>
+```
 
 
+
+To check the base dir, we just need to open it as a directory before doing
+any other processing. If it opens successfully as a directory, we add
+matches and return before going into parsing base into diretory/file.
+
+### "Check base dir"
+```go
+if files, err := ioutil.ReadDir(base); err == nil {
+	// This was a directory, so use the empty string as a prefix.
+	fileprefix := ""
+	filedir := base
+	<<<"Check files for matches and return>>>
+}
+```
+
+Now, we should have a workable tab completion implementation.

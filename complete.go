@@ -55,6 +55,23 @@ func CommandSuggestions(base string) []string {
 }
 
 func FileSuggestions(base string) []string {
+	if files, err := ioutil.ReadDir(base); err == nil {
+		fileprefix := ""
+		filedir := base
+		var matches []string
+		for _, file := range files {
+			if name := file.Name(); strings.HasPrefix(name, fileprefix) {
+				if filedir != "/" {
+					matches = append(matches, filedir+"/"+name)
+				} else {
+					matches = append(matches, filedir+name)
+				}
+
+			}
+		}
+		return matches
+	}
+
 	filedir := filepath.Dir(base)
 	fileprefix := filepath.Base(base)
 	files, err := ioutil.ReadDir(filedir)
@@ -64,7 +81,12 @@ func FileSuggestions(base string) []string {
 	var matches []string
 	for _, file := range files {
 		if name := file.Name(); strings.HasPrefix(name, fileprefix) {
-			matches = append(matches, filedir+"/"+name)
+			if filedir != "/" {
+				matches = append(matches, filedir+"/"+name)
+			} else {
+				matches = append(matches, filedir+name)
+			}
+
 		}
 	}
 	return matches
