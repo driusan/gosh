@@ -70,3 +70,21 @@ func (c Command) Tokenize() []string {
 
 	return parsed
 }
+
+type Token string
+
+func (t Token) IsPipe() bool {
+	return t == "|"
+}
+
+func (t Token) IsSpecial() bool {
+	return t == "<" || t == ">" || t == "|"
+}
+
+func (t Token) IsStdinRedirect() bool {
+	return t == "<"
+}
+
+func (t Token) IsStdoutRedirect() bool {
+	return t == ">"
+}
