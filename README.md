@@ -510,5 +510,8 @@ adding support for string literals (with spaces) in arguments.
 TabCompletion.md builds on Tokenization.md to add rudimentary command and file
 tab completion to the shell.
 
+Piping.md adds support for stdin/stdout redirection and piping processes
+together with `|`.
+
 The final result of putting this all together after running `go fmt` is in the
 accompanying `*.go` files in this repo, so it should be go gettable.
