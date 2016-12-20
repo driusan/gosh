@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/term"
 	"os"
 	"os/exec"
+	"syscall"
 )
 
 type Command string
@@ -25,6 +26,12 @@ func (c Command) HandleCmd() error {
 		} else {
 			args = append(args, val)
 		}
+	}
+	var backgroundProcess bool
+	if parsed[len(parsed)-1] == "&" {
+		// Strip off the &, it's not part of the command.
+		parsed = parsed[:len(parsed)-1]
+		backgroundProcess = true
 	}
 	if parsed[0] == "cd" {
 		if len(args) == 0 {
@@ -70,7 +77,12 @@ func (c Command) HandleCmd() error {
 				}
 				newCmd.Stdin = pipe
 			} else {
-				newCmd.Stdin = os.Stdin
+				newCmd.Stdin = &ProcessSignaller{
+					newCmd.Process,
+					syscall.SIGTTIN,
+					syscall.SIGTTOU,
+					backgroundProcess,
+				}
 			}
 		}
 		// If there was a Stdout specified, use it.
@@ -93,6 +105,14 @@ func (c Command) HandleCmd() error {
 
 	for _, c := range cmds {
 		c.Start()
+		if ps, ok := c.Stdin.(*ProcessSignaller); ok {
+			ps.Proc = c.Process
+		}
+	}
+	if backgroundProcess {
+		// We can't tell if a background process returns an error
+		// or not, so we just claim it didn't.
+		return nil
 	}
 	return cmds[len(cmds)-1].Wait()
 }
@@ -219,4 +239,40 @@ func main() {
 			cmd += Command(c)
 		}
 	}
+}
+
+type ProcessSignaller struct {
+	// The process to signal when Read from
+	Proc                    *os.Process
+	ReadSignal, WriteSignal os.Signal
+	IsBackground            bool
+}
+
+func (p *ProcessSignaller) Read(b []byte) (n int, err error) {
+	if !p.IsBackground {
+		return os.Stdin.Read(b)
+	}
+	if p.Proc == nil {
+		return 0, fmt.Errorf("Invalid process.")
+	}
+	fmt.Fprintf(os.Stderr, "%d suspended (tty input from background)\n", p.Proc.Pid)
+	if err := p.Proc.Signal(p.ReadSignal); err != nil {
+		return 0, err
+	}
+	return 0, fmt.Errorf("Not an interactive terminal.")
+}
+
+func (p *ProcessSignaller) Write(b []byte) (n int, err error) {
+	if !p.IsBackground {
+		return os.Stdout.Write(b)
+	}
+
+	if p.Proc == nil {
+		return 0, fmt.Errorf("Invalid process.")
+	}
+	fmt.Fprintf(os.Stderr, "%d suspended (tty output from background)\n", p.Proc.Pid)
+	if err := p.Proc.Signal(p.WriteSignal); err != nil {
+		return 0, err
+	}
+	return 0, fmt.Errorf("Not an interactive terminal.")
 }

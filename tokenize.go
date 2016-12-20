@@ -33,17 +33,14 @@ func (c Command) Tokenize() []string {
 				tokenStart = i + 1
 				inStringLiteral = true
 			}
-		case '|':
+		case '|', '<', '>', '&':
 			if inStringLiteral {
 				continue
 			}
-
 			if tokenStart >= 0 {
 				parsed = append(parsed, string(c[tokenStart:i]))
-			} else {
-				parsed = append(parsed, string(c[:i]))
 			}
-			parsed = append(parsed, "|")
+			parsed = append(parsed, string(chr))
 			tokenStart = -1
 		default:
 			if inStringLiteral {
