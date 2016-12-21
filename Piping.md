@@ -55,6 +55,7 @@ func (c Command) HandleCmd() error {
 	<<<Replace environment variables in command>>>
 	<<<Handle cd command>>>
 	<<<Execute command and return>>>
+}
 ```
 
 ### "Handle no tokens in command case"
@@ -205,12 +206,13 @@ func (t Token) IsStdoutRedirect() bool {
 ```
 
 ### "main.go globals" +=
+```go
 func ParseCommands(tokens []Token) []ParsedCommand {
 	<<<ParseCommands Implementation>>>
 }
 ```
 
-### ParseCommands Implementation
+### "ParseCommands Implementation"
 ```go
 // Keep track of the current command being built
 var currentCmd ParsedCommand
@@ -227,7 +229,14 @@ for i, t := range tokens {
 	if t.IsSpecial() {
 		if foundSpecial == false {
 			// Convert from Token to string
-			for _, t := range tokens[lastCommandStart:i] {
+			var slice []Token
+			if i == len(tokens)-1 {
+				slice = tokens[lastCommandStart:]
+			} else {
+				slice = tokens[lastCommandStart:i]
+			}
+
+			for _, t := range slice {
 				currentCmd.Args = append(currentCmd.Args, string(t))
 			}
 		}
@@ -242,6 +251,7 @@ for i, t := range tokens {
 allCommands = append(allCommands, currentCmd)
 return allCommands
 ```
+
 We'll add the tests to the existing tokenize_test, since it's still related
 to parsing the command.
 
@@ -353,6 +363,7 @@ in this code. We'll just do it by adding some extra booleans to
 track if the next token is for redirecting Stdin or Stdout.
 
 ### "ParseCommands Implementation"
+```go
 // Keep track of the current command being built
 var currentCmd ParsedCommand
 // Keep array of all commands that have been built, so we can create the
@@ -377,7 +388,14 @@ for i, t := range tokens {
 	if t.IsSpecial() || i == len(tokens)-1 {
 		if foundSpecial == false {
 			// Convert from Token to string
-			for _, t := range tokens[lastCommandStart:i] {
+			var slice []Token
+			if i == len(tokens)-1 {
+				slice = tokens[lastCommandStart:]
+			} else {
+				slice = tokens[lastCommandStart:i]
+			}
+
+			for _, t := range slice {
 				currentCmd.Args = append(currentCmd.Args, string(t))
 			}
 		}
@@ -461,8 +479,9 @@ for i, c := range commands {
 	cmds = append(cmds, newCmd)
 
 	<<<Hookup stdin and stdout pipes>>>
-	<<<Start Processes and Wait>>>
 }
+
+<<<Start Processes and Wait>>>
 ```
 
 How do we hookup the pipes? If there was a `<` or `>` redirect, it's easy, we

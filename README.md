@@ -124,7 +124,7 @@ and do a little refactoring, just to be proactive.
 ### "mainbody"
 ```go
 <<<Initialize Terminal>>>
-<<<Command Loop>
+<<<Command Loop>>>
 ```
 
 ### "main.go globals"

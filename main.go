@@ -18,7 +18,6 @@ func (c Command) HandleCmd() error {
 		PrintPrompt()
 		return nil
 	}
-	// Allocate a string slice of the length of the arguments
 	var args []string
 	for _, val := range parsed[1:] {
 		if val[0] == '$' {
@@ -27,14 +26,12 @@ func (c Command) HandleCmd() error {
 			args = append(args, val)
 		}
 	}
-
 	if parsed[0] == "cd" {
 		if len(args) == 0 {
 			return fmt.Errorf("Must provide an argument to cd")
 		}
 		return os.Chdir(args[0])
 	}
-
 	// Convert parsed from []string to []Token. We should refactor all the code
 	// to use tokens, but for now just do this instead of going back and changing
 	// all the references/declarations in every other section of code.
@@ -43,13 +40,11 @@ func (c Command) HandleCmd() error {
 		parsedtokens = append(parsedtokens, Token(t))
 	}
 	commands := ParseCommands(parsedtokens)
-
 	var cmds []*exec.Cmd
 	for i, c := range commands {
 		if len(c.Args) == 0 {
 			// This should have never happened, there is
 			// no command, but let's avoid panicing.
-			fmt.Fprintf(os.Stderr, "Error: no command\n")
 			continue
 		}
 		newCmd := exec.Command(c.Args[0], c.Args[1:]...)
@@ -78,7 +73,6 @@ func (c Command) HandleCmd() error {
 				newCmd.Stdin = os.Stdin
 			}
 		}
-
 		// If there was a Stdout specified, use it.
 		if c.Stdout != "" {
 			// Create the file to convert it to an io.Reader
@@ -95,14 +89,13 @@ func (c Command) HandleCmd() error {
 				newCmd.Stdout = os.Stdout
 			}
 		}
-
 	}
+
 	for _, c := range cmds {
 		c.Start()
 	}
 	return cmds[len(cmds)-1].Wait()
 }
-
 func PrintPrompt() {
 	fmt.Printf("\n> ")
 }
@@ -144,6 +137,7 @@ func ParseCommands(tokens []Token) []ParsedCommand {
 				} else {
 					slice = tokens[lastCommandStart:i]
 				}
+
 				for _, t := range slice {
 					currentCmd.Args = append(currentCmd.Args, string(t))
 				}
@@ -176,7 +170,6 @@ func main() {
 	defer t.Restore()
 	t.SetCbreak()
 	PrintPrompt()
-
 	r := bufio.NewReader(t)
 	var cmd Command
 	for {
@@ -186,6 +179,8 @@ func main() {
 		}
 		switch c {
 		case '\n':
+			// The terminal doesn't echo in raw mode,
+			// so print the newline itself to the terminal.
 			fmt.Printf("\n")
 
 			if cmd == "exit" {
@@ -199,7 +194,6 @@ func main() {
 				}
 				PrintPrompt()
 			}
-
 			cmd = ""
 		case '\u0004':
 			if len(cmd) == 0 {
@@ -209,16 +203,16 @@ func main() {
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 			}
-		case '\t':
-			err := cmd.Complete()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-			}
 
 		case '\u007f', '\u0008':
 			if len(cmd) > 0 {
 				cmd = cmd[:len(cmd)-1]
 				fmt.Printf("\u0008 \u0008")
+			}
+		case '\t':
+			err := cmd.Complete()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
 			}
 		default:
 			fmt.Printf("%c", c)

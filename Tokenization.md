@@ -46,7 +46,7 @@ func TestTokenization(t *testing.T) {
 		{"     ls    	", []string{"ls"}},
 		{"ls -l", []string{"ls", "-l"}},
 		{"git commit -m 'I am message'", []string{"git", "commit", "-m", "I am message"}},
-		{"git commit -m 'I\'m another message'", []string{"git", "commit", "-m", "I'm another message"}},
+		{"git commit -m 'I\\'m another message'", []string{"git", "commit", "-m", "I'm another message"}},
 		{"ls|cat", []string{"ls", "|", "cat"}},
 	}
 	for i, tc := range tests {
@@ -132,7 +132,7 @@ func (c Command) Tokenize() []string {
 
 Finally, the implementation.
 
-### "Tokeninze Implementation"
+### "Tokenize Implementation"
 ```go
 return strings.Fields(string(c))
 ```
@@ -151,7 +151,6 @@ up being:
 "bufio"
 "fmt"
 "github.com/pkg/term"
-"io"
 "os"
 "os/exec"
 ```
@@ -188,7 +187,7 @@ We can use `unicode.IsWhitespace()` for the whitespace checking, and a token
 start int to keep track of where the start of the current token is so that
 we can append to the parsed args slice when we get to the end of one.
 
-### "Tokeninze Implementation"
+### "Tokenize Implementation"
 ```go
 var parsed []string
 tokenStart := -1
@@ -197,7 +196,6 @@ for i, chr := range c {
 	switch chr {
 		case '\'':
 			<<<Handle Quote>>>
-		}
 		default:
 			<<<Handle Nonquote>>>
 	}
@@ -209,7 +207,7 @@ We'll start with the handling of the character `'`. We need to know
 if it's the start or end of our string literal. If it's the start,
 mark it, and if it's the end, add it to the parsed tokens.
 
-### "HandleQuote"
+### "Handle Quote"
 ```go
 if inStringLiteral {
 	if i > 0 && c[i-1] == '\\' {
@@ -281,7 +279,7 @@ In fact, there's no whitespace at the end of the last token, and we forgot to
 take care of that. So after the loop, let's check if tokenStart is >= 0 and
 add the final token if so.
 
-### "Tokeninze Implementation"
+### "Tokenize Implementation"
 ```go
 var parsed []string
 tokenStart := -1
@@ -290,7 +288,6 @@ for i, chr := range c {
 	switch chr {
 		case '\'':
 			<<<Handle Quote>>>
-		}
 		default:
 			<<<Handle Nonquote>>>
 	}
@@ -300,7 +297,7 @@ if tokenStart >= 0 {
 		// Ignore the ' character
 		tokenStart += 1
 	}
-	parsed = append(parsed, c[tokenStart:])
+	parsed = append(parsed, string(c[tokenStart:]))
 }
 return parsed
 ```
@@ -320,9 +317,9 @@ FAIL	github.com/driusan/dsh	0.005s
 Let's add it to our switch statement, and do a little refactoring of our
 of our Tokenize implementation into smaller semantic chunks while we're at it. 
 
-### "Tokeninze Implementation"
+### "Tokenize Implementation"
 ```go
-<<<Tokenize Globals>
+<<<Tokenize Globals>>>
 for i, chr := range c {
 	<<<Handle Tokenize Chr>>>
 }
@@ -341,7 +338,6 @@ inStringLiteral := false
 switch chr {
 	case '\'':
 		<<<Handle Quote>>>
-	}
 	case '|':
 		<<<Handle Pipe Chr>>>
 	default:
@@ -356,7 +352,7 @@ if tokenStart >= 0 {
 		// Ignore the ' character
 		tokenStart += 1
 	}
-	parsed = append(parsed, c[tokenStart:])
+	parsed = append(parsed, string(c[tokenStart:]))
 }
 return parsed
 ```
@@ -370,8 +366,11 @@ as well as a `|` token.
 if inStringLiteral {
 	continue
 }
+
 if tokenStart >= 0 {
 	parsed = append(parsed, string(c[tokenStart:i]))
+} else {
+	parsed = append(parsed, string(c[:i]))
 }
 parsed = append(parsed, "|")
 tokenStart = -1
@@ -390,3 +389,11 @@ We can pass arguments to programs with strings!
 There's probably better ways to do this (like using the
 [`text/scanner`](https://golang.org/pkg/text/scanner/) package and
 we may want to revisit later, but for now this works.
+
+We also never used the `other tokenize_test.go imports` macro, so let's define
+an empty one to avoid compilation errors:
+
+### "other tokenize_test.go imports"
+```go
+```
+

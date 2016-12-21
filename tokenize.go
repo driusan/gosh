@@ -19,8 +19,6 @@ func (c Command) Tokenize() []string {
 				}
 				inStringLiteral = false
 
-				// i is the `'`, which means the previous character was the end of the
-				// token
 				token := string(c[tokenStart:i])
 
 				// Replace escaped quotes with just a single ' before appending
@@ -39,8 +37,11 @@ func (c Command) Tokenize() []string {
 			if inStringLiteral {
 				continue
 			}
+
 			if tokenStart >= 0 {
 				parsed = append(parsed, string(c[tokenStart:i]))
+			} else {
+				parsed = append(parsed, string(c[:i]))
 			}
 			parsed = append(parsed, "|")
 			tokenStart = -1
@@ -59,7 +60,6 @@ func (c Command) Tokenize() []string {
 			}
 		}
 	}
-
 	if tokenStart >= 0 {
 		if inStringLiteral {
 			// Ignore the ' character
@@ -67,7 +67,6 @@ func (c Command) Tokenize() []string {
 		}
 		parsed = append(parsed, string(c[tokenStart:]))
 	}
-
 	return parsed
 }
 

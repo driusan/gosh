@@ -61,6 +61,10 @@ for {
 	}
 	switch c {
 		case '\n':
+			// The terminal doesn't echo in raw mode,
+			// so print the newline itself to the terminal.
+			fmt.Printf("\n")
+
 			<<<Handle Command>>>
 			cmd = ""
 		case '\u0004':
@@ -80,6 +84,7 @@ for {
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 			}
 		default:
+			fmt.Printf("%c", c)
 			cmd += Command(c)
 	}
 }
@@ -128,7 +133,7 @@ case 0:
 	suggestions = CommandSuggestions(base)
 case 1:
 	base = tokens[0]
-	suggestions = CommandSuggestions(tokens[0])
+	suggestions = CommandSuggestions(base)
 default:
 	base = tokens[len(tokens)-1]
 	suggestions = FileSuggestions(base)
@@ -143,6 +148,7 @@ If there's one, we'll use it, and if there's more than one, we'll
 print them.
 
 (We also still need to return something.)
+
 ### "AutoCompletion Implementation" +=
 ```go
 switch len(suggestions) {
@@ -156,6 +162,7 @@ default:
 return nil
 ```
 
+
 So, we said we'd define the functions we just used:
 
 ### "other completion.go globals"
@@ -167,6 +174,13 @@ func CommandSuggestions(base string) []string {
 func FileSuggestions(base string) []string {
 	<<<File Suggestions Implementation>>>
 }
+```
+
+We should also import the `fmt` package that we just used:
+
+### "completion.go imports"
+```go
+"fmt"
 ```
 
 ## Command Suggestions
@@ -192,6 +206,7 @@ a list of files, so let's add that (and the things we just used) to the import
 list.
 
 ### "completion.go imports" +=
+```go
 "os"
 "strings"
 "io/ioutil"
@@ -223,7 +238,7 @@ Display is easy.
 
 ### "Display Suggestions"
 ```go
-fmt.Printf("%v", suggestions)
+fmt.Printf("\n%v\n", suggestions)
 ```
 
 For completion, we need to delete the last token, and then add the new
@@ -257,7 +272,7 @@ To do that, we'll use the standard `path/filepath` package.
 
 ### "completion.go imports" +=
 ```go
-"path/filepath
+"path/filepath"
 ```
 
 We'll try to just call filepath.Dir() on the token, and then use the same
@@ -336,7 +351,7 @@ if files, err := ioutil.ReadDir(base); err == nil {
 	// This was a directory, so use the empty string as a prefix.
 	fileprefix := ""
 	filedir := base
-	<<<"Check files for matches and return>>>
+	<<<Check files for matches and return>>>
 }
 ```
 

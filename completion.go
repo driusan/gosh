@@ -33,7 +33,6 @@ func (c *Command) Complete() error {
 		*c += Command(suggest)
 		PrintPrompt()
 		fmt.Printf("%s", *c)
-
 	default:
 		fmt.Printf("\n%v\n", suggestions)
 	}
@@ -44,6 +43,8 @@ func CommandSuggestions(base string) []string {
 	paths := strings.Split(os.Getenv("PATH"), ":")
 	var matches []string
 	for _, path := range paths {
+		// We don't care if there's an invalid path in $PATH, so ignore
+		// the error.
 		files, _ := ioutil.ReadDir(path)
 		for _, file := range files {
 			if name := file.Name(); strings.HasPrefix(name, base) {
@@ -56,6 +57,7 @@ func CommandSuggestions(base string) []string {
 
 func FileSuggestions(base string) []string {
 	if files, err := ioutil.ReadDir(base); err == nil {
+		// This was a directory, so use the empty string as a prefix.
 		fileprefix := ""
 		filedir := base
 		var matches []string
@@ -66,7 +68,6 @@ func FileSuggestions(base string) []string {
 				} else {
 					matches = append(matches, filedir+name)
 				}
-
 			}
 		}
 		return matches
@@ -78,6 +79,7 @@ func FileSuggestions(base string) []string {
 	if err != nil {
 		return nil
 	}
+
 	var matches []string
 	for _, file := range files {
 		if name := file.Name(); strings.HasPrefix(name, fileprefix) {
@@ -86,7 +88,6 @@ func FileSuggestions(base string) []string {
 			} else {
 				matches = append(matches, filedir+name)
 			}
-
 		}
 	}
 	return matches

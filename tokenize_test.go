@@ -9,17 +9,18 @@ func TestTokenization(t *testing.T) {
 		cmd      Command
 		expected []string
 	}{
-		{"ls", []string{"ls"}},
+		{cmd: "ls", expected: []string{"ls"}},
 		{"     ls    	", []string{"ls"}},
 		{"ls -l", []string{"ls", "-l"}},
 		{"git commit -m 'I am message'", []string{"git", "commit", "-m", "I am message"}},
+		{"git commit -m 'I\\'m another message'", []string{"git", "commit", "-m", "I'm another message"}},
 		{"ls|cat", []string{"ls", "|", "cat"}},
 	}
 	for i, tc := range tests {
 		val := tc.cmd.Tokenize()
 		if len(val) != len(tc.expected) {
 			// The below loop might panic if the lengths aren't equal, so this is fatal instead of an error.
-			t.Fatalf("Mismatch for result length in test case %d. Got '%v' want '%d'", i, len(val), len(tc.expected))
+			t.Fatalf("Mismatch for result length in test case %d. Got '%v' want '%v'", i, len(val), len(tc.expected))
 		}
 		for j, token := range val {
 			if token != tc.expected[j] {
@@ -28,7 +29,6 @@ func TestTokenization(t *testing.T) {
 		}
 	}
 }
-
 func TestParseCommands(t *testing.T) {
 	tests := []struct {
 		val      []Token
@@ -76,10 +76,10 @@ func TestParseCommands(t *testing.T) {
 		}
 		for j, _ := range val {
 			if val[j].Stdin != tc.expected[j].Stdin {
-				t.Errorf("Mismatch for test %d Stdin. Got '%v' want '%v'", i, val[j].Stdin, tc.expected[j].Stdin)
+				t.Fatalf("Mismatch for test %d Stdin. Got %v want %v", i, val[j].Stdin, tc.expected[j].Stdin)
 			}
 			if val[j].Stdout != tc.expected[j].Stdout {
-				t.Errorf("Mismatch for test %d Stdout. Got %v want %v", i, val[j].Stdout, tc.expected[j].Stdout)
+				t.Fatalf("Mismatch for test %d Stdout. Got %v want %v", i, val[j].Stdout, tc.expected[j].Stdout)
 			}
 			for k, _ := range val[j].Args {
 				if val[j].Args[k] != tc.expected[j].Args[k] {
