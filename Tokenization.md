@@ -162,7 +162,7 @@ And now if we run our test...
 --- FAIL: TestTokenization (0.00s)
 	tokenize_test.go:22: Mismatch for result length in test case 3. Got 6 want 4
 FAIL
-FAIL	github.com/driusan/dsh	0.006s
+FAIL	github.com/driusan/gosh	0.006s
 exit status 1
 ```
 
@@ -267,7 +267,7 @@ And when we run our tests...
 --- FAIL: TestTokenization (0.00s)
 	tokenize_test.go:22: Mismatch for result length in test case 0. Got 0 want 1
 FAIL
-FAIL	github.com/driusan/dsh	0.005s
+FAIL	github.com/driusan/gosh	0.005s
 
 ```
 
@@ -311,7 +311,7 @@ surprising since we didn't implement '|' as a delimiter.
 	tokenize_test.go:22: Mismatch for result length in test case 4. Got '1' want '3'
 FAIL
 exit status 1
-FAIL	github.com/driusan/dsh	0.005s
+FAIL	github.com/driusan/gosh	0.005s
 ```
 
 Let's add it to our switch statement, and do a little refactoring of our
@@ -381,7 +381,7 @@ And now...
 ```
 > go test
 PASS
-ok  	github.com/driusan/dsh	0.005s
+ok  	github.com/driusan/gosh	0.005s
 ```
 
 We can pass arguments to programs with strings!

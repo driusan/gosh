@@ -1,4 +1,4 @@
-# dsh Shell
+# gosh Shell
 
 This is an attempt to write a simple UNIX shell using literate programming. We'll
 be using Go to write it, because I like Go.

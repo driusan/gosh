@@ -306,7 +306,7 @@ Run our tests and..
 --- FAIL: TestParseCommands (0.00s)
 	tokenize_test.go:55: Unexpected number of ParsedCommands in test 1. Got [{[]  }] want [{[ls]  } {[cat]  }]
 FAIL
-FAIL	github.com/driusan/dsh	0.005s
+FAIL	github.com/driusan/gosh	0.005s
 
 ```
 
