@@ -127,7 +127,10 @@ if parsed[len(parsed)-1] == "&" {
 ### "Start Processes and Wait"
 ```go
 for _, c := range cmds {
-	c.Start()
+	err := c.Start()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+	}
 }
 if backgroundProcess {
 	// We can't tell if a background process returns an error
@@ -405,8 +408,7 @@ return cmds[len(cmds)-1].Wait()
 
 That's.. sort of working, except that user input now seems to be extra slow
 when running in the foregroundand there's no indication from more about it
- running in the background or way
-to resume it.
+ running in the background or way to resume it.
 
 At least it's easy to print an error message before sending a signal.
 
@@ -449,3 +451,83 @@ func (p *ProcessSignaller) Write(b []byte) (n int, err error) {
 }
 ```
 
+Now, what about that speed issue? In fact, it's blocking in the Read() call,
+while os.Stdin didn't when set to the processes's stdin directly. I'm not really
+certain why that's the case, but we can check if there's data available to return
+and send an error instead of blocking in Read when there's no data available.
+
+To do that, we'll have to make the terminal that was initialized available
+in main() available globally.
+
+
+### "main.go globals" +=
+```go
+var terminal *term.Term
+```
+
+### "Initialize Terminal" +=
+```go
+terminal = t
+```
+
+And then use that to add a check before calling os.Stdin.Read(). We'll send an
+io.EOF error along with it, because in non-Go languages the definition of "EOF"
+is "a read that returns 0 bytes" in C (where functions can only return 1 value)
+so that's how the program that was invoked will be interpreting the 0 byte read
+anyways.
+
+### "main.go imports" +=
+```go
+"io"
+```
+### "Process Signaller"
+```go
+type ProcessSignaller struct{
+	// The process to signal when Read from
+	Proc *os.Process
+	ReadSignal, WriteSignal os.Signal
+	IsBackground bool
+}
+
+func (p *ProcessSignaller) Read(b []byte) (n int, err error) {
+	if !p.IsBackground {
+		// If there's no data available from os.Stdin,
+		// don't block.
+		if n, err := terminal.Available(); n <= 0 {
+			if err != nil {
+				return n, err
+			}
+			return n, io.EOF
+		}
+		return os.Stdin.Read(b)
+	}
+	if p.Proc == nil {
+		return 0, fmt.Errorf("Invalid process.")
+	}
+	fmt.Fprintf(os.Stderr, "%d suspended (tty input from background)\n", p.Proc.Pid)
+	if err := p.Proc.Signal(p.ReadSignal); err != nil {
+		return 0, err
+	}
+	return 0, fmt.Errorf("Not an interactive terminal.")
+}
+
+func (p *ProcessSignaller) Write(b []byte) (n int, err error) {
+	if !p.IsBackground {
+		return os.Stdout.Write(b)
+	}
+
+	if p.Proc == nil {
+		return 0, fmt.Errorf("Invalid process.")
+	}
+	fmt.Fprintf(os.Stderr, "%d suspended (tty output from background)\n", p.Proc.Pid)
+	if err := p.Proc.Signal(p.WriteSignal); err != nil {
+		return 0, err
+	}
+	return 0, fmt.Errorf("Not an interactive terminal.")
+}
+```
+
+We can now *start* a process in the background, without any significant
+performance loss, but have no way of sending existing processes to the background,
+or resuming them. This exploration of adding a feature to the shell has
+already lasted long enough, so let's leave job control for another day.

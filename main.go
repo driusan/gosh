@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/pkg/term"
+	"io"
 	"os"
 	"os/exec"
 	"syscall"
@@ -180,6 +181,8 @@ func ParseCommands(tokens []Token) []ParsedCommand {
 	return allCommands
 }
 
+var terminal *term.Term
+
 func main() {
 	// Initialize the terminal
 	t, err := term.Open("/dev/tty")
@@ -190,6 +193,7 @@ func main() {
 	defer t.Restore()
 	t.SetCbreak()
 	PrintPrompt()
+	terminal = t
 	r := bufio.NewReader(t)
 	var cmd Command
 	for {
@@ -250,6 +254,14 @@ type ProcessSignaller struct {
 
 func (p *ProcessSignaller) Read(b []byte) (n int, err error) {
 	if !p.IsBackground {
+		// If there's no data available from os.Stdin,
+		// don't block.
+		if n, err := terminal.Available(); n <= 0 {
+			if err != nil {
+				return n, err
+			}
+			return n, io.EOF
+		}
 		return os.Stdin.Read(b)
 	}
 	if p.Proc == nil {
