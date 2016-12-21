@@ -207,7 +207,7 @@ func main() {
 			// so print the newline itself to the terminal.
 			fmt.Printf("\n")
 
-			if cmd == "exit" {
+			if cmd == "exit" || cmd == "quit" {
 				os.Exit(0)
 			} else if cmd == "" {
 				PrintPrompt()

@@ -234,7 +234,7 @@ call that.
 
 ### "Handle Command"
 ```go
-if cmd == "exit" {
+if cmd == "exit" || cmd == "quit" {
 	os.Exit(0)
 } else {
 	cmd.HandleCmd();
@@ -268,7 +268,7 @@ What's going on? Let's print the error if it happens to find out.
 
 ### "Handle Command"
 ```go
-if cmd == "exit" {
+if cmd == "exit" || cmd == "quit" {
 	os.Exit(0)
 } else {
 	err := cmd.HandleCmd()
@@ -311,7 +311,7 @@ So our new command handling code is:
 
 ### "Handle Command"
 ```go
-if cmd == "exit" {
+if cmd == "exit" || cmd == "quit" {
 	os.Exit(0)
 } else if cmd == "" {
 	PrintPrompt()
