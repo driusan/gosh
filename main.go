@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"syscall"
 )
 
@@ -34,11 +35,26 @@ func (c Command) HandleCmd() error {
 		parsed = parsed[:len(parsed)-1]
 		backgroundProcess = true
 	}
-	if parsed[0] == "cd" {
+	switch parsed[0] {
+	case "cd":
 		if len(args) == 0 {
 			return fmt.Errorf("Must provide an argument to cd")
 		}
 		return os.Chdir(args[0])
+	case "set":
+		if len(args) != 2 {
+			return fmt.Errorf("Usage: set var value")
+		}
+		return os.Setenv(args[0], args[1])
+	case "source":
+		if len(args) < 1 {
+			return fmt.Errorf("Usage: source file [...other files]")
+		}
+
+		for _, f := range args {
+			SourceFile(f)
+		}
+		return nil
 	}
 	// Convert parsed from []string to []Token. We should refactor all the code
 	// to use tokens, but for now just do this instead of going back and changing
@@ -183,6 +199,30 @@ func ParseCommands(tokens []Token) []ParsedCommand {
 
 var terminal *term.Term
 
+func SourceFile(filename string) error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	scanner := bufio.NewReader(f)
+	for {
+		line, err := scanner.ReadString('\n')
+		switch err {
+		case io.EOF:
+			return nil
+		case nil:
+			// Nothing special
+		default:
+			return err
+		}
+		c := Command(line)
+		if err := c.HandleCmd(); err != nil {
+			return err
+		}
+	}
+}
+
 func main() {
 	// Initialize the terminal
 	t, err := term.Open("/dev/tty")
@@ -194,6 +234,10 @@ func main() {
 	t.SetCbreak()
 	PrintPrompt()
 	terminal = t
+	os.Setenv("SHELL", "gosh")
+	if u, err := user.Current(); err == nil {
+		SourceFile(u.HomeDir + "/.goshrc")
+	}
 	r := bufio.NewReader(t)
 	var cmd Command
 	for {
