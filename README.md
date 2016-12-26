@@ -37,11 +37,15 @@ import (
 
 <<<main.go globals>>>
 
+<<<main.go funcs>>>
+```
+
+### "main.go funcs"
+```go
 func main() {
 	<<<mainbody>>>
 }
 ```
-
 Our main body is going to be a loop that repeatedly reads from `os.Stdin`.
 This means that we should probably start by adding `os` to the import list.
 
@@ -241,7 +245,7 @@ if cmd == "exit" || cmd == "quit" {
 }
 ```
 
-### "main.go globals" +=
+### "main.go funcs" +=
 ```go
 <<<HandleCmd Implementation>>>
 ```
@@ -326,7 +330,7 @@ if cmd == "exit" || cmd == "quit" {
 
 We need to define PrintPrompt() that we just used.
 
-### "main.go globals" +=
+### "main.go funcs" +=
 ```go
 func PrintPrompt() {
 	fmt.Printf("\n> ")
@@ -463,7 +467,7 @@ func (c Command) HandleCmd() error {
 There's still one minor noticable bug. If we hit `^D` on an empty line, it should
 be treated as an EOF instead of adding the character `0x04`. (And
 if it's not an empty line, we probably still shouldn't add it to
-the command)
+the command.)
 
 ### "Command Loop"
 ```go

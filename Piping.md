@@ -205,7 +205,7 @@ func (t Token) IsStdoutRedirect() bool {
 }
 ```
 
-### "main.go globals" +=
+### "main.go funcs" +=
 ```go
 func ParseCommands(tokens []Token) []ParsedCommand {
 	<<<ParseCommands Implementation>>>
