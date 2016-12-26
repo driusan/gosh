@@ -104,7 +104,7 @@ initializing the terminal but before going into the command loop.
 
 ### "Initialize Shell"
 ```go
-os.Setenv("SHELL", "gosh")
+os.Setenv("SHELL", os.Args[0])
 <<<Read startup script>>>
 ```
 
@@ -112,7 +112,7 @@ Before reading the startup script, maybe it would make sense to add a
 "source" builtin, since the code if effectively the same. We'll define
 the function:
 
-### "main.go globals" +=
+### "main.go funcs" +=
 ```go
 func SourceFile(filename string) error {
 	<<<SourceFile implementation>>>

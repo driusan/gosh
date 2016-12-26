@@ -57,7 +57,8 @@ var cmd Command
 for {
 	c, _, err := r.ReadRune()
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		continue
 	}
 	switch c {
 		case '\n':

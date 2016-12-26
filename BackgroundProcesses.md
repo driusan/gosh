@@ -4,10 +4,16 @@ To be really useful as a shell, we need to at least handle the
 basics of background processes. Let's start with starting a process in
 the background.
 
-This should be easy. All we need to do is check if the last token
+This should be easy[1]. All we need to do is check if the last token
 in the command is an `&`, and if it is call `cmd.Start()` instead of
 `cmd.Wait()` in our command handler. In fact, we should probably
 start by ensuring we treat '&' as a special token when tokenizing.
+
+([1] NB: The below is wrong, both from a theoretical, and a bugginess
+perspective. See BackgroundProcessesRevisited.md for a (more) accurate
+implementation of background/foreground process coordination. This remains
+as an exploration of how someone who's ignorant of the details of UNIX process
+group arcana (which I was, at the time of writing) might approach the problem.)
 
 Recall we had:
 
@@ -201,6 +207,7 @@ a process. In fact, we'll make it a ReadWriter and allow different signals
 for read and write, in case we want to implement the `SIGTTOU` behaviour too,
 though for now we'll just do `SIGTTIN`.
 
+
 ### "Process Signaller"
 ```go
 type ProcessSignaller struct{
@@ -240,6 +247,7 @@ its own file.
 
 Now, we'll create the io.ReadWriter while checking if it's a background
 process, and hook stdin up to that instead.
+
 ### "Handle background inputs"
 ```go
 var backgroundProcess bool
