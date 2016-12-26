@@ -104,7 +104,7 @@ initializing the terminal but before going into the command loop.
 
 ### "Initialize Shell"
 ```go
-os.Setenv("SHELL", "gosh")
+os.Setenv("SHELL", os.Args[0])
 <<<Read startup script>>>
 ```
 

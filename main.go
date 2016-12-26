@@ -7,9 +7,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"os/user"
 	"syscall"
+	"unsafe"
 )
+
+var processGroups []uint32
 
 type Command string
 
@@ -65,6 +69,9 @@ func (c Command) HandleCmd() error {
 	}
 	commands := ParseCommands(parsedtokens)
 	var cmds []*exec.Cmd
+	sysProcAttr := &syscall.SysProcAttr{
+		Setpgid: true,
+	}
 	for i, c := range commands {
 		if len(c.Args) == 0 {
 			// This should have never happened, there is
@@ -73,6 +80,7 @@ func (c Command) HandleCmd() error {
 		}
 		newCmd := exec.Command(c.Args[0], c.Args[1:]...)
 		newCmd.Stderr = os.Stderr
+		newCmd.SysProcAttr = sysProcAttr
 		cmds = append(cmds, newCmd)
 
 		// If there was an Stdin specified, use it.
@@ -94,12 +102,12 @@ func (c Command) HandleCmd() error {
 				}
 				newCmd.Stdin = pipe
 			} else {
-				newCmd.Stdin = &ProcessSignaller{
+				newCmd.Stdin = os.Stdin /*&ProcessSignaller{
 					newCmd.Process,
 					syscall.SIGTTIN,
 					syscall.SIGTTOU,
 					backgroundProcess,
-				}
+				}*/
 			}
 		}
 		// If there was a Stdout specified, use it.
@@ -115,23 +123,61 @@ func (c Command) HandleCmd() error {
 			// unless it's the last command in the pipeline,
 			// which still uses os.Stdout
 			if i == len(commands)-1 {
+				fmt.Printf("Using STDOUT for %v\n", i)
 				newCmd.Stdout = os.Stdout
 			}
 		}
 	}
 
-	for _, c := range cmds {
-		c.Start()
-		if ps, ok := c.Stdin.(*ProcessSignaller); ok {
-			ps.Proc = c.Process
+	var pgrp uint32 = uint32(syscall.Getpgrp())
+	var leader uint32 = pgrp
+	fmt.Fprintf(os.Stderr, "My PGID: %v My FD: %v\n", pgrp, terminal.GetFD())
+	for i, c := range cmds {
+		fmt.Fprintf(os.Stderr, "Starting %d\n", i)
+		if err := c.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			continue
 		}
+		if sysProcAttr.Pgid == 0 {
+			sysProcAttr.Pgid, _ = syscall.Getpgid(c.Process.Pid)
+			pgrp = uint32(sysProcAttr.Pgid)
+			processGroups = append(processGroups, pgrp)
+		}
+
+		pgid, _ := syscall.Getpgid(c.Process.Pid)
+		fmt.Fprintf(os.Stderr, "PID: %v PGID: %v\n", c.Process.Pid, pgid)
 	}
 	if backgroundProcess {
 		// We can't tell if a background process returns an error
 		// or not, so we just claim it didn't.
 		return nil
 	}
-	return cmds[len(cmds)-1].Wait()
+
+	// DEBUG
+	fpgrp := 0
+	var fd int = terminal.GetFD()
+	x, y, errno := syscall.RawSyscall(syscall.SYS_IOCTL, uintptr(fd), syscall.TIOCGPGRP, uintptr(unsafe.Pointer(&fpgrp)))
+	fmt.Printf("x: %v, y: %v, err: %v %v (%v)\n", x, y, errno, fpgrp, leader)
+
+	_, _, err1 := syscall.RawSyscall(
+		syscall.SYS_IOCTL,
+		uintptr(0),
+		uintptr(syscall.TIOCSPGRP),
+		uintptr(unsafe.Pointer(&pgrp)),
+	)
+	err2 := cmds[len(cmds)-1].Wait()
+	_, _, err3 := syscall.RawSyscall(
+		syscall.SYS_IOCTL,
+		uintptr(0),
+		uintptr(syscall.TIOCSPGRP),
+		uintptr(unsafe.Pointer(&leader)),
+	)
+	fmt.Fprintf(os.Stderr, "IOCTL err %v\nWait err: %v\nresuming: %v %v %v\n", err1, err2, err3)
+	for i, pgrp := range processGroups {
+		fmt.Fprintf(os.Stderr, "Job %d => %v\n", i, pgrp)
+	}
+	return err2
+
 }
 func PrintPrompt() {
 	fmt.Printf("\n> ")
@@ -234,101 +280,93 @@ func main() {
 	t.SetCbreak()
 	PrintPrompt()
 	terminal = t
-	os.Setenv("SHELL", "gosh")
+	os.Setenv("SHELL", os.Args[0])
 	if u, err := user.Current(); err == nil {
 		SourceFile(u.HomeDir + "/.goshrc")
 	}
+	signal.Ignore(
+		//syscall.SIGTTIN,
+		syscall.SIGTTOU,
+	)
+	child := make(chan os.Signal)
+
+	signal.Notify(child, syscall.SIGCHLD)
+	/*
+		var pgrp uint32 = uint32(syscall.Getpgrp())
+		_, _, err1 := syscall.RawSyscall(
+			syscall.SYS_IOCTL,
+			uintptr(0),
+			uintptr(syscall.TIOCSPGRP),
+			uintptr(unsafe.Pointer(&pgrp)),
+		)
+		fmt.Fprintf(os.Stderr, "%v\n", err1)
+		c := make(chan os.Signal, 1)
+		signal.Notify(c)
+	*/
 	r := bufio.NewReader(t)
 	var cmd Command
 	for {
-		c, _, err := r.ReadRune()
-		if err != nil {
-			panic(err)
-		}
-		switch c {
-		case '\n':
-			// The terminal doesn't echo in raw mode,
-			// so print the newline itself to the terminal.
-			fmt.Printf("\n")
+		select {
+		case <-child:
+			var leader uint32 = uint32(syscall.Getpid())
 
-			if cmd == "exit" || cmd == "quit" {
-				os.Exit(0)
-			} else if cmd == "" {
-				PrintPrompt()
-			} else {
-				err := cmd.HandleCmd()
+			_, _, err3 := syscall.RawSyscall(
+				syscall.SYS_IOCTL,
+				uintptr(0),
+				uintptr(syscall.TIOCSPGRP),
+				uintptr(unsafe.Pointer(&leader)),
+			)
+			if err3 != syscall.Errno(0) {
+				panic(fmt.Sprintf("Err: %v", err3))
+			}
+
+			//println("Received child signal!")
+		default:
+			c, _, err := r.ReadRune()
+			if err != nil {
+				continue
+			}
+			switch c {
+			case '\n':
+				// The terminal doesn't echo in raw mode,
+				// so print the newline itself to the terminal.
+				fmt.Printf("\n")
+
+				if cmd == "exit" || cmd == "quit" {
+					os.Exit(0)
+				} else if cmd == "" {
+					PrintPrompt()
+				} else {
+					err := cmd.HandleCmd()
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "%v\n", err)
+					}
+					PrintPrompt()
+				}
+				cmd = ""
+			case '\u0004':
+				if len(cmd) == 0 {
+					os.Exit(0)
+				}
+				err := cmd.Complete()
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%v\n", err)
 				}
-				PrintPrompt()
-			}
-			cmd = ""
-		case '\u0004':
-			if len(cmd) == 0 {
-				os.Exit(0)
-			}
-			err := cmd.Complete()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-			}
 
-		case '\u007f', '\u0008':
-			if len(cmd) > 0 {
-				cmd = cmd[:len(cmd)-1]
-				fmt.Printf("\u0008 \u0008")
+			case '\u007f', '\u0008':
+				if len(cmd) > 0 {
+					cmd = cmd[:len(cmd)-1]
+					fmt.Printf("\u0008 \u0008")
+				}
+			case '\t':
+				err := cmd.Complete()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%v\n", err)
+				}
+			default:
+				fmt.Printf("%c", c)
+				cmd += Command(c)
 			}
-		case '\t':
-			err := cmd.Complete()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-			}
-		default:
-			fmt.Printf("%c", c)
-			cmd += Command(c)
 		}
 	}
-}
-
-type ProcessSignaller struct {
-	// The process to signal when Read from
-	Proc                    *os.Process
-	ReadSignal, WriteSignal os.Signal
-	IsBackground            bool
-}
-
-func (p *ProcessSignaller) Read(b []byte) (n int, err error) {
-	if !p.IsBackground {
-		// If there's no data available from os.Stdin,
-		// don't block.
-		if n, err := terminal.Available(); n <= 0 {
-			if err != nil {
-				return n, err
-			}
-			return n, io.EOF
-		}
-		return os.Stdin.Read(b)
-	}
-	if p.Proc == nil {
-		return 0, fmt.Errorf("Invalid process.")
-	}
-	fmt.Fprintf(os.Stderr, "%d suspended (tty input from background)\n", p.Proc.Pid)
-	if err := p.Proc.Signal(p.ReadSignal); err != nil {
-		return 0, err
-	}
-	return 0, fmt.Errorf("Not an interactive terminal.")
-}
-
-func (p *ProcessSignaller) Write(b []byte) (n int, err error) {
-	if !p.IsBackground {
-		return os.Stdout.Write(b)
-	}
-
-	if p.Proc == nil {
-		return 0, fmt.Errorf("Invalid process.")
-	}
-	fmt.Fprintf(os.Stderr, "%d suspended (tty output from background)\n", p.Proc.Pid)
-	if err := p.Proc.Signal(p.WriteSignal); err != nil {
-		return 0, err
-	}
-	return 0, fmt.Errorf("Not an interactive terminal.")
 }

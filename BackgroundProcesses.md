@@ -451,7 +451,9 @@ func (p *ProcessSignaller) Write(b []byte) (n int, err error) {
 }
 ```
 
-Now, what about that speed issue? In fact, it's blocking in the Read() call,
+Now, what about that speed issue? In fact, it's blocking in the Read() call.
+
+
 while os.Stdin didn't when set to the processes's stdin directly. I'm not really
 certain why that's the case, but we can check if there's data available to return
 and send an error instead of blocking in Read when there's no data available.
