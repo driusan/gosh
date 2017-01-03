@@ -1,5 +1,19 @@
 # Background Processes, Revisited
 
+We hacked together a method of running processes in the background
+with BackgroundProcesses.md, but unfortunately it isn't a very good
+hack and we should probably do it right.
+
+In reality, there's no need for the Process Signaller. The OS keeps
+track of what the foreground process is, and sends signals the interrupt
+signals as appropriate.
+
+All we should be doing is using system calls to tell it when the foreground
+process has switched. So let's start by getting rid of the Process Signaller,
+and hooking up the first process to os.Stdin (unless redirected.) That way
+we avoid the overhead that was causing our shell to be noticablely slow when
+using our custom io.Reader for STDIN
+
 ### "Process Signaller"
 ```go
 ```
@@ -31,20 +45,34 @@ if c.Stdin != "" {
 }
 ```
 
+Now, when started a process in Go, exec can take a syscall.*SysProcAttr to
+set system properties of the process that gets created. SysProcAttr has
+a Foreground attribute, but if we used that, we wouldn't be able to create
+our pipeline. As soon as the first process in the pipeline was created, we'd
+be relegated to a background process ourselves.
+
+What we need to do instead is set the process group ID (PGid) for each of our
+processes, and at the end have the kernel switch that group.
+
+syscall.SysProcAttr let's us set the pgid with a Setpgid flag. If we explicitly
+set a Pgid it'll set it to that, otherwise it'll create a new one. We'll let
+the first Pgid be set automatically, and then after starting the first process
+get the Pgid for that process and set the rest of the processes in that group
+to the new pgid.
+
+We'll also want to keep a list of what process groups exist.
+
 ### "Start Processes and Wait"
 ```go
-var pgrp uint32 = uint32(syscall.Getpgrp())
-fmt.Fprintf(os.Stderr, "My PGID: %v\n", pgrp)
+var pgrp uint32
 sysProcAttr := &syscall.SysProcAttr{
 	Setpgid: true,
 }
 
-for i, c := range cmds {
-	fmt.Fprintf(os.Stderr, "Starting %d\n", i)
+for _, c := range cmds {
 	c.SysProcAttr = sysProcAttr
 	if err := c.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		continue
+		return err
 	}
 	if sysProcAttr.Pgid == 0 {
 		sysProcAttr.Pgid, _ = syscall.Getpgid(c.Process.Pid)
@@ -91,6 +119,7 @@ var ForegroundPid uint32
 signal.Ignore(
 //	syscall.SIGTTIN,
 	syscall.SIGTTOU,
+	syscall.SIGINT,
 )
 child := make(chan os.Signal)
 signal.Notify(child, syscall.SIGCHLD)
@@ -137,10 +166,8 @@ func Wait(ch chan os.Signal) {
 			for _, pg := range processGroups {
 				var status syscall.WaitStatus
 				pid1, err := syscall.Wait4(int(pg), &status, syscall.WNOHANG|syscall.WUNTRACED|syscall.WCONTINUED, nil)
-				fmt.Fprintf(os.Stderr, "Err for %v (%v): %v\n", pid1, pg, err)
 				if pid1 == 0 && err == nil {
 					// We don't want to accidentally remove things from processGroups
-					fmt.Fprintf(os.Stderr, "%v is probably stopped\n", pg)
 					newPg = append(newPg, pg)
 					continue
 				}
@@ -165,10 +192,36 @@ func Wait(ch chan os.Signal) {
 					}
 				case status.Stopped():
 					newPg = append(newPg, pg)
+					if status.Continued() {
+						fmt.Fprintf(os.Stderr, "Resuming %v...? \n", pg)
+						if ForegroundPid == 0 {
+							fmt.Fprintf(os.Stderr, "Resuming %v... !\n", pg)
+							var pid uint32 = pg
+							_, _, err3 := syscall.RawSyscall(
+								syscall.SYS_IOCTL,
+								uintptr(0),
+								uintptr(syscall.TIOCSPGRP),
+								uintptr(unsafe.Pointer(&pid)),
+							)
+							if err3 !=syscall.Errno(0) {
+								panic(fmt.Sprintf("Err: %v", err3))
+							}
+
+						} else {
+							fmt.Fprintf(os.Stderr, "%v continued in background\n", pid1)
+						}
+					} else {
+						if pg == ForegroundPid && ForegroundPid != 0 {
+							<<<Resume Foreground>>>
+						}
+						fmt.Fprintf(os.Stderr, "%v is stopped\n", pid1)
+					}
+				case status.Signaled():
 					if pg == ForegroundPid && ForegroundPid != 0 {
 						<<<Resume Foreground>>>
 					}
-					fmt.Fprintf(os.Stderr, "%v is stopped\n", pid1)
+
+					fmt.Fprintf(os.Stderr, "%v terminated by signal %v\n", pg, status.StopSignal())
 				case status.Exited():
 					if pg == ForegroundPid && ForegroundPid != 0 {
 						<<<Resume Foreground>>>
@@ -189,6 +242,78 @@ func Wait(ch chan os.Signal) {
 		}
 	}
 }
+```
+
+
+### "Builtin Commands" +=
+```go
+case "jobs":
+	fmt.Printf("Job listing:\n\n")
+	for i, leader := range processGroups {
+		fmt.Printf("Job %d (%d)\n", i, leader)
+	}
+	return nil
+```
+
+### "main.go imports" +=
+```go
+"strconv"
+```
+### "Builtin Commands" +=
+```go
+case "bg":
+	i, err := strconv.Atoi(args[0])
+	if err != nil {
+		return err
+	}
+
+	if i >= len(processGroups) {
+		return fmt.Errorf("Invalid job id %d", i)
+	}
+	p, err := os.FindProcess(int(processGroups[i]))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Sending signal %v...\n", syscall.SIGCONT)
+	if err := p.Signal(syscall.SIGCONT); err != nil {
+		return err
+	}
+	return nil
+```
+
+### "Builtin Commands" +=
+```go
+case "fg":
+	i, err := strconv.Atoi(args[0])
+	if err != nil {
+		return err
+	}
+
+	if i >= len(processGroups) {
+		return fmt.Errorf("Invalid job id %d", i)
+	}
+	p, err := os.FindProcess(int(processGroups[i]))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Sending signal %v...\n", syscall.SIGCONT)
+	if err := p.Signal(syscall.SIGCONT); err != nil {
+		return err
+	}
+	var pid uint32 = processGroups[i]
+	fmt.Fprintf(os.Stderr, "Resuming %v... !\n", pid)
+	_, _, err3 := syscall.RawSyscall(
+		syscall.SYS_IOCTL,
+		uintptr(0),
+		uintptr(syscall.TIOCSPGRP),
+		uintptr(unsafe.Pointer(&pid)),
+	)
+	if err3 != syscall.Errno(0) {
+		panic(fmt.Sprintf("Err: %v", err3))
+	}
+	ForegroundPid = pid
+
+	return ForegroundProcess
 ```
 
 And now we can use our shell for real, with CTRL-C/CTRL-Z etc going to the
