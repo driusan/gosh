@@ -139,7 +139,6 @@ if backgroundProcess {
 ForegroundPid = pgrp
 ```
 
-
 ### "Set Foreground Process to pgrp"
 ```go
 _, _, err1 := syscall.RawSyscall(
@@ -169,7 +168,34 @@ We should probably declare the sentinal error that we're using, too.
 var ForegroundProcess error = errors.New("Process is a foreground process")
 ```
 
-Now, the problem is that once we launch a foreground process, we don't magically
+One problem with this is that the process we're invoking likely expects the
+terminal to be in the normal line mode, not CBreak mode, so we should probably
+restore the tty to its original state before changing the active process, and
+then set it to CBreak mode again once we get control back. (Ideally, when we
+got control we'd check the status of the the terminal and keep it associated
+with the process group in case the process was background/foregrounded, but for
+now we'll just make the flawed assumption that we're the only one who will
+ever change the tty mode, since the term package we're using doesn't seem
+to have an easy way to get the current mode.)
+
+### "Set Foreground Process to pgrp"
+```go
+terminal.Restore()
+_, _, err1 := syscall.RawSyscall(
+	syscall.SYS_IOCTL,
+	uintptr(0),
+	uintptr(syscall.TIOCSPGRP),
+	uintptr(unsafe.Pointer(&pgrp)),
+)
+// RawSyscall returns an int for the error, we need to compare
+// to syscall.Errno(0) instead of nil
+if err1 != syscall.Errno(0) {
+	return err1
+}
+return ForegroundProcess
+```
+
+Now, another problem is that once we launch a foreground process, we don't magically
 become the foreground process again once it exits. We need to do that ourselves once
 a foreground process terminates. But how do we know a foreground process terminated?
 
@@ -274,6 +300,7 @@ processGroups = newPg
 
 We also want to make sure we don't return from Wait if something else caused
 a SIGCHLD, so let's wrap it in an infinite loop and only return when appropriate.
+
 ### "Wait Implementation"
 ```go
 for {
@@ -404,6 +431,7 @@ but our variable names are different.
 
 ### "Make pg foreground"
 ```go
+terminal.Restore()
 var pid uint32 = pg
 _, _, err3 := syscall.RawSyscall(
 	syscall.SYS_IOCTL,
@@ -422,6 +450,7 @@ to make sure we set the ForegroundPid to 0.
 
 ### "Resume Shell Foreground"
 ```go
+terminal.SetCbreak()
 var mypid uint32 = uint32(syscall.Getpid())
 _, _, err3 := syscall.RawSyscall(
 	syscall.SYS_IOCTL,
@@ -518,6 +547,7 @@ if err != nil {
 if err := p.Signal(syscall.SIGCONT); err != nil {
 	return err
 }
+terminal.Restore()
 var pid uint32 = processGroups[i]
 _, _, err3 := syscall.RawSyscall(
 	syscall.SYS_IOCTL,

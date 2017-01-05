@@ -189,6 +189,7 @@ func (c Command) HandleCmd() error {
 		if err := p.Signal(syscall.SIGCONT); err != nil {
 			return err
 		}
+		terminal.Restore()
 		var pid uint32 = processGroups[i]
 		_, _, err3 := syscall.RawSyscall(
 			syscall.SYS_IOCTL,
@@ -284,6 +285,7 @@ func (c Command) HandleCmd() error {
 		return nil
 	}
 	ForegroundPid = pgrp
+	terminal.Restore()
 	_, _, err1 := syscall.RawSyscall(
 		syscall.SYS_IOCTL,
 		uintptr(0),
@@ -395,6 +397,7 @@ func Wait(ch chan os.Signal) {
 					newPg = append(newPg, pg)
 
 					if ForegroundPid == 0 {
+						terminal.Restore()
 						var pid uint32 = pg
 						_, _, err3 := syscall.RawSyscall(
 							syscall.SYS_IOCTL,
@@ -410,6 +413,7 @@ func Wait(ch chan os.Signal) {
 				case status.Stopped():
 					newPg = append(newPg, pg)
 					if pg == ForegroundPid && ForegroundPid != 0 {
+						terminal.SetCbreak()
 						var mypid uint32 = uint32(syscall.Getpid())
 						_, _, err3 := syscall.RawSyscall(
 							syscall.SYS_IOCTL,
@@ -425,6 +429,7 @@ func Wait(ch chan os.Signal) {
 					fmt.Fprintf(os.Stderr, "%v is stopped\n", pid1)
 				case status.Signaled():
 					if pg == ForegroundPid && ForegroundPid != 0 {
+						terminal.SetCbreak()
 						var mypid uint32 = uint32(syscall.Getpid())
 						_, _, err3 := syscall.RawSyscall(
 							syscall.SYS_IOCTL,
@@ -441,6 +446,7 @@ func Wait(ch chan os.Signal) {
 					fmt.Fprintf(os.Stderr, "%v terminated by signal %v\n", pg, status.StopSignal())
 				case status.Exited():
 					if pg == ForegroundPid && ForegroundPid != 0 {
+						terminal.SetCbreak()
 						var mypid uint32 = uint32(syscall.Getpid())
 						_, _, err3 := syscall.RawSyscall(
 							syscall.SYS_IOCTL,
