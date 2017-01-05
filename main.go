@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"os/user"
+	"regexp"
 	"strconv"
 	"syscall"
 	"unsafe"
@@ -204,6 +205,23 @@ func (c Command) HandleCmd() error {
 			return ForegroundProcess
 		}
 
+	case "autocomplete":
+		if len(args) < 2 {
+			return fmt.Errorf("Usage: autocomplete regex value [more values...]")
+		}
+		if autocompletions == nil {
+			autocompletions = make(map[*regexp.Regexp][]Token)
+		}
+		re, err := regexp.Compile(args[0])
+		if err != nil {
+			return err
+		}
+
+		for _, t := range args[1:] {
+			autocompletions[re] = append(autocompletions[re], Token(t))
+		}
+
+		return nil
 	}
 	// Convert parsed from []string to []Token. We should refactor all the code
 	// to use tokens, but for now just do this instead of going back and changing

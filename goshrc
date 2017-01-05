@@ -1,0 +1,3 @@
+autocomplete ^git$ add checkout show
+autocomplete '^git show$' '!git rev-list -n 10 HEAD'
+autocomplete '^git add$' '!git ls-files -mo'
