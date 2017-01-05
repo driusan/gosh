@@ -176,8 +176,8 @@ and build another table driven test.
 // Convert parsed from []string to []Token. We should refactor all the code
 // to use tokens, but for now just do this instead of going back and changing
 // all the references/declarations in every other section of code.
-var parsedtokens []Token
-for _, t := range parsed {
+var parsedtokens []Token = []Token{Token(parsed[0])}
+for _, t := range args {
 	parsedtokens = append(parsedtokens, Token(t))	
 }
 commands := ParseCommands(parsedtokens)
