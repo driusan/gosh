@@ -102,11 +102,17 @@ import (
 	<<<completion.go imports>>>
 )
 
+<<<completion.go globals>>>
+
 func (c *Command) Complete() error {
 	<<<AutoCompletion Implementation>>>
 }
 
-<<<other completion.go globals>>>
+<<<other completion.go functions>>>
+```
+
+### "completion.go globals"
+```go
 ```
 
 For now, we'll start with an implementation that just does nothing but return
@@ -166,7 +172,7 @@ return nil
 
 So, we said we'd define the functions we just used:
 
-### "other completion.go globals"
+### "other completion.go functions"
 ```go
 func CommandSuggestions(base string) []string {
 	<<<Command Suggestions Implementation>>>
