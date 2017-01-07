@@ -177,6 +177,7 @@ func CommandSuggestions(base string) []string {
 }
 
 func FileSuggestions(base string) []string {
+	base = replaceTilde(base)
 	if files, err := ioutil.ReadDir(base); err == nil {
 		// This was a directory, so use the empty string as a prefix.
 		fileprefix := ""
@@ -184,11 +185,7 @@ func FileSuggestions(base string) []string {
 		var matches []string
 		for _, file := range files {
 			if name := file.Name(); strings.HasPrefix(name, fileprefix) {
-				if filedir != "/" {
-					matches = append(matches, filedir+"/"+name)
-				} else {
-					matches = append(matches, filedir+name)
-				}
+				matches = append(matches, filepath.Clean(filedir+"/"+name))
 			}
 		}
 		return matches
@@ -204,11 +201,7 @@ func FileSuggestions(base string) []string {
 	var matches []string
 	for _, file := range files {
 		if name := file.Name(); strings.HasPrefix(name, fileprefix) {
-			if filedir != "/" {
-				matches = append(matches, filedir+"/"+name)
-			} else {
-				matches = append(matches, filedir+name)
-			}
+			matches = append(matches, filepath.Clean(filedir+"/"+name))
 		}
 	}
 	return matches

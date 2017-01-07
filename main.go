@@ -10,8 +10,10 @@ import (
 	"os/exec"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -28,6 +30,7 @@ var processGroups []uint32
 
 var ForegroundPid uint32
 var ForegroundProcess error = errors.New("Process is a foreground process")
+var homedirRe *regexp.Regexp = regexp.MustCompile("^~([a-zA-Z]*)?(/*)?")
 
 func main() {
 	// Initialize the terminal
@@ -119,6 +122,20 @@ func (c Command) HandleCmd() error {
 			args = append(args, val)
 		}
 	}
+	// newargs will be at least len(parsed in size, so start by allocating a slice
+	// of that capacity
+	newargs := make([]string, 0, len(args))
+	for _, token := range args {
+		token = replaceTilde(token)
+		expanded, err := filepath.Glob(token)
+		if err != nil || len(expanded) == 0 {
+			newargs = append(newargs, token)
+			continue
+		}
+		newargs = append(newargs, expanded...)
+
+	}
+	args = newargs
 	var backgroundProcess bool
 	if parsed[len(parsed)-1] == "&" {
 		// Strip off the &, it's not part of the command.
@@ -492,4 +509,19 @@ func Wait(ch chan os.Signal) {
 			return
 		}
 	}
+}
+func replaceTilde(s string) string {
+	if match := homedirRe.FindStringSubmatch(s); match != nil {
+		var u *user.User
+		var err error
+		if match[1] != "" {
+			u, err = user.Lookup(match[1])
+		} else {
+			u, err = user.Current()
+		}
+		if err == nil {
+			return strings.Replace(s, match[0], u.HomeDir, 1)
+		}
+	}
+	return s
 }
