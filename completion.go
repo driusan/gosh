@@ -17,42 +17,20 @@ func (c *Command) Complete() error {
 	var psuggestions, wsuggestions []string
 	var base string
 
-	firstpart := strings.Join(tokens[:len(tokens)-1], " ")
+	var firstpart string
+	if len(tokens) > 0 {
+		base = tokens[len(tokens)-1]
+		firstpart = strings.Join(tokens[:len(tokens)-1], " ")
+	}
 	wholecmd := strings.Join(tokens, " ")
-	base = tokens[len(tokens)-1]
+
 	for re, resuggestions := range autocompletions {
-		if re.MatchString(wholecmd) {
+		if matches := re.FindStringSubmatch(firstpart); matches != nil {
 			for _, val := range resuggestions {
-				if len(val) > 2 && val[0] == '!' {
-					cmd := strings.Fields(string(val[1:]))
-					if len(cmd) < 1 {
-						continue
-					}
-					c := exec.Command(cmd[0], cmd[1:]...)
-					out, err := c.Output()
-					if err != nil {
-						println(err.Error())
-						continue
-					}
-					sugs := strings.Split(string(out), "\n")
-					for _, val := range sugs {
-						if val != base {
-							wsuggestions = append(wsuggestions, val)
-						}
-					}
-				} else {
-					// There was no last token, to take the prefix of, so
-					// just suggest the whole val.
-					// As a special case, we still want to ignore it
-					// if the suggestion matches the last token, so
-					// that we don't step on psuggestion's feet.
-					if string(val) != base {
-						wsuggestions = append(wsuggestions, string(val))
-					}
+				for n, match := range matches {
+					val = Token(strings.Replace(string(val), fmt.Sprintf(`\%d`, n), match, -1))
 				}
-			}
-		} else if re.MatchString(firstpart) {
-			for _, val := range resuggestions {
+
 				// If it's length 1 it's just "!", and we should probably
 				// just suggest it literally.
 				if len(val) > 2 && val[0] == '!' {
@@ -77,13 +55,52 @@ func (c *Command) Complete() error {
 				}
 			}
 		}
+
+		if len(psuggestions) > 0 {
+			continue
+		}
+
+		if matches := re.FindStringSubmatch(wholecmd); matches != nil {
+			for _, val := range resuggestions {
+				for n, match := range matches {
+					val = Token(strings.Replace(string(val), fmt.Sprintf(`\%d`, n), match, -1))
+				}
+
+				if len(val) > 2 && val[0] == '!' {
+					cmd := strings.Fields(string(val[1:]))
+					if len(cmd) < 1 {
+						continue
+					}
+					c := exec.Command(cmd[0], cmd[1:]...)
+					out, err := c.Output()
+					if err != nil {
+						println(err.Error())
+						continue
+					}
+					sugs := strings.Split(string(out), "\n")
+					for _, val := range sugs {
+						if val != base {
+							wsuggestions = append(wsuggestions, val)
+						}
+					}
+				} else {
+					// There was no last token, to take the prefix of, so
+					// just suggest the whole val.
+					wsuggestions = append(wsuggestions, string(val))
+				}
+			}
+		}
 	}
-	if len(wsuggestions) > 0 || len(psuggestions) > 0 {
+	if len(psuggestions) > 0 {
+		wsuggestions = nil
+		goto foundSuggestions
+	} else if len(wsuggestions) > 0 {
 		goto foundSuggestions
 	}
 
 	switch len(tokens) {
 	case 0:
+		base = ""
 		wsuggestions = CommandSuggestions(base)
 	case 1:
 		base = tokens[0]
@@ -116,7 +133,26 @@ foundSuggestions:
 			fmt.Printf("%s", *c)
 		}
 	default:
-		fmt.Printf("\n%v\n", append(psuggestions, wsuggestions...))
+		suggestions := append(psuggestions, wsuggestions...)
+
+		if len(wsuggestions) == 0 {
+			suggest := LongestPrefix(suggestions)
+			*c = Command(strings.TrimSpace(string(*c)))
+			*c = Command(strings.TrimSuffix(string(*c), base))
+			*c += Command(suggest)
+		}
+		fmt.Printf("\n[")
+		for i, s := range suggestions {
+			if strings.ContainsAny(s, " \t") {
+				fmt.Printf(`"%v"`, s)
+			} else {
+				fmt.Printf("%v", s)
+			}
+			if i != len(suggestions)-1 {
+				fmt.Printf(" ")
+			}
+		}
+		fmt.Printf("]\n")
 
 		PrintPrompt()
 		fmt.Printf("%s", *c)

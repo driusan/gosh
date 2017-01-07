@@ -5,4 +5,6 @@ MDFILES=README.md Tokenization.md TabCompletion.md Piping.md \
 all: $(MDFILES)
 	lmt $(MDFILES)
 	go fmt .
-	go build . 
+	go test .
+	go build .
+

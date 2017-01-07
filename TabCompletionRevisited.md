@@ -439,6 +439,7 @@ suggest := psuggestions[0]
 PrintPrompt()
 fmt.Printf("%s", *c)
 ```
+
 ### "Complete WSuggestion"
 ```go
 suggest := wsuggestions[0]
@@ -569,6 +570,461 @@ Two ideas:
 2. Why don't we make the regex subgroup matches available as a variable to the
    suggestions?
 
-(TODO: Write these two sections here, but for now this is enough of an improvement
-commit to master. The file goshrc also has a sample config with completions I
-find useful)
+## Partial Matching
+
+Partial matching is fairly straight forward. We have a list of matches, and we
+want to find the longest common prefix. There's probably a longest common
+substring in Go that someone's written, but since we only care about the prefix
+case we can do a naive implementation that ranges through our matches.
+
+We'll start by adding a block to our AutoCompletion Implementation right before
+Display Suggestions.
+
+### "AutoCompletion Implementation"
+```go
+tokens := c.Tokenize()
+var psuggestions, wsuggestions []string
+var base string
+
+<<<Check regex suggestions>>>
+if len(wsuggestions) > 0 || len(psuggestions) > 0 {
+	goto foundSuggestions
+}
+
+switch len(tokens) {
+case 0:
+	wsuggestions = CommandSuggestions(base)
+case 1:
+	base = tokens[0]
+	psuggestions = CommandSuggestions(base)
+default:
+	<<<Check file suggestions>>>
+}
+
+foundSuggestions:
+switch len(psuggestions) + len(wsuggestions){
+case 0:
+	// Print BEL to warn that there were no suggestions.
+	fmt.Printf("\u0007")
+case 1:
+	if len(psuggestions) == 1 {
+		<<<Complete PSuggestion>>>
+	} else {
+		<<<Complete WSuggestion>>>
+	}
+default:
+	<<<Complete Partial Matches>>>
+	<<<Display All Suggestions>>>
+}
+return nil
+```
+
+our suggestions are stored in psuggestions and wsuggestions. We want the longest
+prefix in the union of them. Let's start by creating a all of those. 
+
+### "Complete Partial Matches"
+```go
+suggestions := append(psuggestions, wsuggestions...)
+```
+
+Since we had to do something similar for displaying, let's update that code
+to use our new union slice.
+
+### "Display All Suggestions"
+```go
+fmt.Printf("\n%v\n", suggestions)
+
+PrintPrompt()
+fmt.Printf("%s", *c)
+```
+
+
+Now, all we need to do is find the prefix. Let's start assume there's already a
+LongestPrefix function, and add the completion code first, based on our
+Psuggestion code:
+
+### "Complete Partial Matches" +=
+```go
+suggest := LongestPrefix(suggestions)
+*c = Command(strings.TrimSpace(string(*c)))
+*c = Command(strings.TrimSuffix(string(*c), base))
+*c += Command(suggest)
+```
+
+Except that we've reintroduced the regression that caused us to split
+wsuggestions from psuggestions in the first place. Let's ensure that 
+
+### "Complete Partial Matches"
+```go
+```
+
+Then we can design with a table-driven test to make sure our LongestPrefix is
+working as expected.
+
+### prefix_test.go
+```go
+package main
+
+import (
+	"testing"
+	<<<Prefix Test Imports>>>
+)
+
+func TestLongestPrefix(t *testing.T) {
+	cases := []struct{
+		Val []string
+		Expected string
+	}{
+		<<<LongestPrefix Test Cases>>>
+	}
+	for i, tc := range cases {
+		if got := LongestPrefix(tc.Val); got != tc.Expected {
+			t.Errorf("Unexpected prefix for case %d: got %v want %v", i, got, tc.Expected)
+		}
+	}
+}
+```
+
+And we should define our stub function:
+
+### prefix.go
+```go
+package main
+
+import (
+	<<<prefix.go imports>>>
+)
+
+func LongestPrefix(strs []string) string {
+	<<<LongestPrefix Implementation>>>
+}
+```
+
+And stubs for the blocks we just defined so that it will compile.
+### "prefix.go imports"
+```go
+```
+
+### "Prefix Test Imports"
+```go
+```
+
+### "LongestPrefix Implementation"
+```go
+return ""
+```
+
+
+Now, we'll define some real test cases.
+
+### "LongestPrefix Test Cases"
+```go
+// Empty case or nil slice
+{ nil, ""},
+{ []string{}, "" },
+
+// Prefix of 1 element is itself
+{ []string{"a"}, "a"},
+
+// 2 elements with no prefix
+{ []string{"a", "b"}, "" },
+
+// 2 elements with a common prefix
+{ []string{"aa", "ab"}, "a"},
+
+// multiple elements
+{ []string{"aaaa", "aabb", "aaac"}, "aa"},
+```
+
+And as expected, our tests fail.
+
+So for our implementation, let's start by assuming that strs[0] is the longest
+prefix, then we'll go through the remaining elements, range through them, and
+if anything doesn't match, take the smaller prefix and go on to the next element.
+
+(We'll also add a quick check for the empty case to make sure it doesn't crash.)
+
+### "LongestPrefix Implementation"
+```go
+if len(strs) == 0 {
+	return ""
+}
+
+prefix := strs[0]
+for _, cmp := range strs[1:] {
+	for i := range prefix {
+		if i > len(cmp) || prefix[i] != cmp[i]{
+			prefix = cmp[:i]
+			break
+		}
+	}
+}
+return prefix
+```
+
+And now our partial completions work, except we're reintroduced the regression
+which caused us to split psuggestions and wsuggestions in the first place. The
+easiest way to handle this is probably do only do prefix suggestions if there
+are no whole-command based suggestions (wsuggestions), because if the user hasn't
+even started typing one letter of the last token that we're matching, the prefix
+completion isn't very useful anyways. (We'll keep the definition of "suggestions"
+since it's referenced in the display block, even if it's meaningless for prefix
+completions now.)
+
+### "Complete Partial Matches"
+```go
+suggestions := append(psuggestions, wsuggestions...)
+
+if len(wsuggestions) == 0 {
+	suggest := LongestPrefix(suggestions)
+	*c = Command(strings.TrimSpace(string(*c)))
+	*c = Command(strings.TrimSuffix(string(*c), base))
+	*c += Command(suggest)
+}
+```
+
+## Subgroup Regexp Matching
+
+Subgroup matching shouldn't be difficult to add, because any regexp engine
+already implements it. Let's start by replacing MatchString with
+FindStringSubmatch when checking our regular expressions, so that we have the
+values that we're going to need later.
+
+### "Check regex suggestions"
+```go
+var firstpart string
+if len(tokens) > 0 {
+	base = tokens[len(tokens)-1]
+	firstpart = strings.Join(tokens[:len(tokens)-1], " ")
+}
+wholecmd := strings.Join(tokens, " ")
+for re, resuggestions := range autocompletions {
+	if matches := re.FindStringSubmatch(wholecmd); matches != nil {
+		for _, val := range resuggestions {
+			if len(val) > 2 && val[0] == '!' {
+				<<<WSuggest output of running command>>>
+			} else {
+				// There was no last token, to take the prefix of, so
+				// just suggest the whole val.
+				// As a special case, we still want to ignore it
+				// if the suggestion matches the last token, so
+				// that we don't step on psuggestion's feet.
+				if string(val) != base {
+					wsuggestions = append(wsuggestions, string(val))
+				}
+			}
+		}
+	} else if matches := re.FindStringSubmatch(firstpart); matches != nil {
+		for _, val := range resuggestions {
+			// If it's length 1 it's just "!", and we should probably
+			// just suggest it literally.
+			if len(val) > 2 && val[0] == '!' {
+				<<<PSuggest output of running command>>>
+			} else if string(val) != base && strings.HasPrefix(string(val), base) {
+				psuggestions = append(psuggestions, string(val))
+			}
+		}
+	}
+}
+```
+
+Now, we should just need to replace \n in the string with matches[n] in our
+suggestions. The `os` package has an `os.Expand` helper that can do this for $n,
+but if we tried to use "$" to represent the submatches, we'd have trouble
+interpretting the "autocomplete" builtin when defining our completions, because
+the $n would be expanded to an environment variable before it got to us.
+
+Luckily, it's not hard to just use a loop that replaces \n with matches[n]
+blindly.
+
+### "Check regex suggestions"
+```go
+var firstpart string
+if len(tokens) > 0 {
+	base = tokens[len(tokens)-1]
+	firstpart = strings.Join(tokens[:len(tokens)-1], " ")
+}
+wholecmd := strings.Join(tokens, " ")
+for re, resuggestions := range autocompletions {
+	if matches := re.FindStringSubmatch(wholecmd); matches != nil {
+		for _, val := range resuggestions {
+			<<<Expand Matches>>>
+
+			if len(val) > 2 && val[0] == '!' {
+				<<<WSuggest output of running command>>>
+			} else {
+				// There was no last token, to take the prefix of, so
+				// just suggest the whole val.
+				// As a special case, we still want to ignore it
+				// if the suggestion matches the last token, so
+				// that we don't step on psuggestion's feet.
+				if string(val) != base {
+					wsuggestions = append(wsuggestions, string(val))
+				}
+			}
+		}
+	} else if matches := re.FindStringSubmatch(firstpart); matches != nil {
+		for _, val := range resuggestions {
+			<<<Expand Matches>>>
+
+			// If it's length 1 it's just "!", and we should probably
+			// just suggest it literally.
+			if len(val) > 2 && val[0] == '!' {
+				<<<PSuggest output of running command>>>
+			} else if string(val) != base && strings.HasPrefix(string(val), base) {
+				psuggestions = append(psuggestions, string(val))
+			}
+		}
+	}
+}
+```
+
+### "Expand Matches"
+```go
+for n, match := range matches {
+	val = Token(strings.Replace(string(val), fmt.Sprintf(`\%d`, n), match, -1))
+}
+```
+
+This is going to be horribly inefficient as the number of substring matches
+increases in a regex, but shouldn't affect the general case where people aren't
+using submatches much, so there isn't much need to optimize it right now. The
+most powerful use of the substring matches is probably to use it to pass
+arguments to an autocomplete suggester program, and the overhead of invoking a
+separate program in that case is probably going to dwarf our loop anyways.
+
+Now, \0 (or any submatch) may have a space in it, which makes the display confusing.
+Let's update our printing to include quotation marks if the suggestion has a
+space or a tab.
+
+### "Display All Suggestions"
+```go
+fmt.Printf("\n[")
+for  i, s := range suggestions {
+	if strings.ContainsAny(s, " \t") {
+		fmt.Printf(`"%v"`, s)
+	} else {
+		fmt.Printf("%v", s)
+	}
+	if i != len(suggestions)-1 {
+		fmt.Printf(" ")
+	} 
+}
+fmt.Printf("]\n")
+
+PrintPrompt()
+fmt.Printf("%s", *c)
+```
+
+We still seem to have a bug where, if regexes match both psuggestions and
+wsuggestions, the wsuggestions will always get suggested even if they don't
+match the partially typed string. To fix that, let's just set wsuggestions to
+nil if there are any psuggestions to make sure they get priority.
+
+### "AutoCompletion Implementation"
+```go
+tokens := c.Tokenize()
+var psuggestions, wsuggestions []string
+var base string
+
+<<<Check regex suggestions>>>
+if len(psuggestions) > 0 {
+	wsuggestions = nil
+	goto foundSuggestions
+} else if len(wsuggestions) > 0 {
+	goto foundSuggestions
+}
+
+switch len(tokens) {
+case 0:
+	base = ""
+	wsuggestions = CommandSuggestions(base)
+case 1:
+	base = tokens[0]
+	psuggestions = CommandSuggestions(base)
+default:
+	<<<Check file suggestions>>>
+}
+
+foundSuggestions:
+switch len(psuggestions) + len(wsuggestions){
+case 0:
+	// Print BEL to warn that there were no suggestions.
+	fmt.Printf("\u0007")
+case 1:
+	if len(psuggestions) == 1 {
+		<<<Complete PSuggestion>>>
+	} else {
+		<<<Complete WSuggestion>>>
+	}
+default:
+	<<<Complete Partial Matches>>>
+	<<<Display All Suggestions>>>
+}
+return nil
+```
+
+That still didn't do it because we're doing something silly and psuggestions
+in an else if block after wsuggestions, so let's fix that. Now that we have the
+psuggestion always takes precedence over wsuggestions logic, we can just skip
+checking wsuggestions if there's any psuggestions found.
+
+### "Check regex suggestions"
+```go
+var firstpart string
+if len(tokens) > 0 {
+	base = tokens[len(tokens)-1]
+	firstpart = strings.Join(tokens[:len(tokens)-1], " ")
+}
+wholecmd := strings.Join(tokens, " ")
+
+for re, resuggestions := range autocompletions {
+	if matches := re.FindStringSubmatch(firstpart); matches != nil {
+		for _, val := range resuggestions {
+			<<<Expand Matches>>>
+
+			// If it's length 1 it's just "!", and we should probably
+			// just suggest it literally.
+			if len(val) > 2 && val[0] == '!' {
+				<<<PSuggest output of running command>>>
+			} else if string(val) != base && strings.HasPrefix(string(val), base) {
+				psuggestions = append(psuggestions, string(val))
+			}
+		}
+	}
+
+	if len(psuggestions) > 0 {
+		continue
+	}
+
+	if matches := re.FindStringSubmatch(wholecmd); matches != nil {
+		for _, val := range resuggestions {
+			<<<Expand Matches>>>
+
+			if len(val) > 2 && val[0] == '!' {
+				<<<WSuggest output of running command>>>
+			} else {
+				// There was no last token, to take the prefix of, so
+				// just suggest the whole val.
+				wsuggestions = append(wsuggestions, string(val))
+			}
+		}
+	}
+}
+```
+
+
+## Conclusions
+
+We now have an `autocomplete` builtin which can suggest autocompletions for user
+input based on comparing what they've typed to a regular expression. The
+suggestions can either be simple strings, based on (sub) matches of the regex, 
+or based on invoking a separate program (potentially with arguments, which may
+or may not come from the regex).
+
+We have the potential for great, customizable tab completion, we just need
+some examples.
+
+I've included a sample goshrc in this repo with some simple examples that I use
+in my `~/.goshrc` file. Feel free to send pull requests to it with anything else
+you find useful, and be as creative as you'd like.

@@ -1,3 +1,4 @@
-autocomplete ^git$ add checkout show
+autocomplete ^git$ add commit checkout show 'rebase -i'
 autocomplete '^git show$' '!git rev-list -n 10 HEAD'
-autocomplete '^git add$' '!git ls-files -mo'
+autocomplete '^git add' '!git ls-files --exclude-standard -m -o -d'
+autocomplete '^git commit$' '--amend' '-m'
