@@ -333,9 +333,19 @@ We need to define PrintPrompt() that we just used.
 ### "main.go funcs" +=
 ```go
 func PrintPrompt() {
-	fmt.Printf("\n> ")
+	<<<PrintPrompt Implementation>>>
 }
 ```
+
+We'll start with a simple implementation that just prints a ">" so that we don't 
+get confused and think we're in a POSIX compliant sh prompt, then work on adding
+a better prompt later.
+
+# "PrintPrompt Implementation"
+```go
+fmt.Printf("\n> ")
+```
+
 
 And we'll want to print it on startup too:
 

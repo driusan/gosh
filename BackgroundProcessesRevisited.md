@@ -216,6 +216,7 @@ signal.Notify(child, syscall.SIGCHLD)
 
 Since we're importing `os/signal`, it may be a good idea to ignore some signals, like
 the SIGTTOU we get if we try and print something while not the foreground process.
+We probably want to ignore SIGINT (the user pressed ctrl-C) while we're at it.
 
 ## "Initialize Terminal" +=
 ```go
@@ -227,6 +228,7 @@ signal.Ignore(
 ### "Ignored signal types"
 ```go
 syscall.SIGTTOU,
+syscall.SIGINT,
 ```
 
 (We've used a new few imports that we should probably add, too:

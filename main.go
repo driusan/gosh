@@ -47,7 +47,9 @@ func main() {
 	signal.Notify(child, syscall.SIGCHLD)
 	signal.Ignore(
 		syscall.SIGTTOU,
+		syscall.SIGINT,
 	)
+	os.Setenv("$", "$")
 	os.Setenv("SHELL", os.Args[0])
 	if u, err := user.Current(); err == nil {
 		SourceFile(u.HomeDir + "/.goshrc")
@@ -114,13 +116,9 @@ func (c Command) HandleCmd() error {
 		PrintPrompt()
 		return nil
 	}
-	var args []string
+	args := make([]string, 0, len(parsed))
 	for _, val := range parsed[1:] {
-		if val[0] == '$' {
-			args = append(args, os.Getenv(val[1:]))
-		} else {
-			args = append(args, val)
-		}
+		args = append(args, os.ExpandEnv(val))
 	}
 	// newargs will be at least len(parsed in size, so start by allocating a slice
 	// of that capacity
@@ -147,7 +145,14 @@ func (c Command) HandleCmd() error {
 		if len(args) == 0 {
 			return fmt.Errorf("Must provide an argument to cd")
 		}
-		return os.Chdir(args[0])
+		old, _ := os.Getwd()
+		err := os.Chdir(args[0])
+		if err == nil {
+			new, _ := os.Getwd()
+			os.Setenv("PWD", new)
+			os.Setenv("OLDPWD", old)
+		}
+		return err
 	case "set":
 		if len(args) != 2 {
 			return fmt.Errorf("Usage: set var value")
@@ -335,7 +340,24 @@ func (c Command) HandleCmd() error {
 	return ForegroundProcess
 }
 func PrintPrompt() {
-	fmt.Printf("\n> ")
+	if p := os.Getenv("PROMPT"); p != "" {
+		if len(p) > 1 && p[0] == '!' {
+			input := os.ExpandEnv(p[1:])
+			split := strings.Fields(input)
+			cmd := exec.Command(split[0], split[1:]...)
+			cmd.Stdout = os.Stderr
+			if err := cmd.Run(); err != nil {
+				if _, ok := err.(*exec.ExitError); !ok {
+					// Fall back on our standard prompt, with a warning.
+					fmt.Fprintf(os.Stderr, "\nInvalid prompt command\n> ")
+				}
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "\n%s", os.ExpandEnv(p))
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "\n> ")
+	}
 }
 func ParseCommands(tokens []Token) []ParsedCommand {
 	// Keep track of the current command being built

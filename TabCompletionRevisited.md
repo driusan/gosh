@@ -1013,7 +1013,6 @@ for re, resuggestions := range autocompletions {
 }
 ```
 
-
 ## Conclusions
 
 We now have an `autocomplete` builtin which can suggest autocompletions for user
