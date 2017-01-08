@@ -210,6 +210,11 @@ We'll create the channel and ask to be notified when we're initializing the term
 
 ## "Initialize Terminal" +=
 ```go
+<<<Create SIGCHLD chan>>>
+```
+
+## "Create SIGCHLD chan"
+```go
 child := make(chan os.Signal)
 signal.Notify(child, syscall.SIGCHLD)
 ```
@@ -219,6 +224,11 @@ the SIGTTOU we get if we try and print something while not the foreground proces
 We probably want to ignore SIGINT (the user pressed ctrl-C) while we're at it.
 
 ## "Initialize Terminal" +=
+```go
+<<<Ignored certain signal types>>>
+```
+
+## "Ignore certain signal types"
 ```go
 signal.Ignore(
 	<<<Ignored signal types>>>

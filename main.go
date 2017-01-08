@@ -41,8 +41,8 @@ func main() {
 	// Restore the previous terminal settings at the end of the program
 	defer t.Restore()
 	t.SetCbreak()
-	PrintPrompt()
 	terminal = t
+
 	child := make(chan os.Signal)
 	signal.Notify(child, syscall.SIGCHLD)
 	signal.Ignore(
@@ -54,6 +54,7 @@ func main() {
 	if u, err := user.Current(); err == nil {
 		SourceFile(u.HomeDir + "/.goshrc")
 	}
+	PrintPrompt()
 	r := bufio.NewReader(t)
 	var cmd Command
 	for {

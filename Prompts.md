@@ -21,11 +21,11 @@ And now if we wanted we could type `set PROMPT $` to make our shell look like
 sh.. except we can't, because the `$` gets treated as an environment variable
 by our parser before it gets to "set".
 
-We can start by using the standard Go `os.Expandenv` function in our replacement
+We can start by using the standard Go `os.ExpandEnv` function in our replacement
 instead of our naive loop that just replaced any tokens that start with '$' with
 the environment variable. This will also have the benefit of making our parser a
-little more standard, and allowing us to use environment variables inside
-of tokens, such as `$GOPATH/bin` too.
+little more standard, and allowing us to use environment variables inside of
+tokens, such as `$GOPATH/bin` too.
 
 ### "Replace environment variables in command"
 ```go
@@ -90,7 +90,8 @@ works.
 It shouldn't be too hard to add a similar check to run the command with its
 standard out being directed to stderr if our PROMPT variable starts with a '!'.
 We could even expand the environment variables in the same way we're already
-doing. We'll 
+doing.
+
 # "PrintPrompt Implementation"
 ```go
 if p := os.Getenv("PROMPT"); p != "" {
@@ -133,6 +134,35 @@ if err := cmd.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "\nInvalid prompt command\n> ")
 	}
 }
+```
+
+Now that we're customizing prompts, we might notice that if we set a prompt in
+our startup script, the first prompt gets printed before our `~/.goshrc` script
+is sourced. Let's add it to Initialize Shell
+
+### "Initialize Shell" += 
+```go
+PrintPrompt()
+```
+
+and take it out of Initialize Terminal. (We'll have to do a little refactoring
+of our blocks that we probably should have done upfront.)
+
+### "Initialize Terminal"
+```go
+// Initialize the terminal
+t, err := term.Open("/dev/tty")
+if err != nil {
+	panic(err)
+}
+// Restore the previous terminal settings at the end of the program
+defer t.Restore()
+t.SetCbreak()
+terminal = t
+
+<<<Create SIGCHLD chan>>>
+<<<Ignore certain signal types>>>
+os.Setenv("$", "$")
 ```
 
 Now, we can create write prompts in any language of our choosing, as long as
